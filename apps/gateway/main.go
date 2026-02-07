@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"go-ecommerce/apps/gateway/middleware" // [新增] 引入认证中间件
 	"go-ecommerce/pkg/config"
 	"go-ecommerce/proto/cart"
 	"go-ecommerce/proto/order"
@@ -89,7 +90,7 @@ func main() {
 	orderClient := order.NewOrderServiceClient(orderConn)
 
 	// ==========================================
-	// 初始化 gRPC 连接 (Payment Service) [新增]
+	// 初始化 gRPC 连接 (Payment Service)
 	// ==========================================
 	paymentTarget := fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "payment-service")
 	paymentConn, err := grpc.Dial(
@@ -108,8 +109,12 @@ func main() {
 	// ==========================================
 	r := gin.Default()
 	v1 := r.Group("/api/v1")
+
+	// ---------------------------------------------------------
+	// 公开接口 (不需要登录)
+	// ---------------------------------------------------------
 	{
-		// ----------- 用户相关 -----------
+		// 用户登录/注册
 		v1.POST("/user/login", func(ctx *gin.Context) {
 			var req struct {
 				Username string `json:"username" binding:"required"`
@@ -156,7 +161,7 @@ func main() {
 			ctx.JSON(http.StatusOK, gin.H{"data": resp})
 		})
 
-		// ----------- 商品相关 -----------
+		// 商品列表/详情
 		v1.GET("/product/list", func(ctx *gin.Context) {
 			page, _ := strconv.Atoi(ctx.DefaultQuery("page", "1"))
 			pageSize, _ := strconv.Atoi(ctx.DefaultQuery("page_size", "10"))
@@ -193,11 +198,18 @@ func main() {
 			}
 			ctx.JSON(http.StatusOK, gin.H{"data": resp})
 		})
+	}
 
+	// ---------------------------------------------------------
+	// 受保护接口 (需要 JWT Token 登录)
+	// ---------------------------------------------------------
+	authed := v1.Group("/")
+	authed.Use(middleware.AuthMiddleware()) // 挂载认证中间件
+	{
 		// ----------- 购物车相关 -----------
-		v1.POST("/cart/add", func(ctx *gin.Context) {
+		authed.POST("/cart/add", func(ctx *gin.Context) {
 			var req struct {
-				UserId   int64 `json:"user_id" binding:"required"`
+				// UserId int64 `json:"user_id"` <--- 已移除，直接从 Token 获取
 				SkuId    int64 `json:"sku_id" binding:"required"`
 				Quantity int32 `json:"quantity" binding:"required"`
 			}
@@ -206,11 +218,14 @@ func main() {
 				return
 			}
 
+			// 安全地从 Context 获取 UserId
+			userId := ctx.MustGet("userId").(int64)
+
 			rpcCtx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
 
 			resp, err := cartClient.AddItem(rpcCtx, &cart.AddItemRequest{
-				UserId: req.UserId,
+				UserId: userId,
 				Item: &cart.CartItem{
 					SkuId:    req.SkuId,
 					Quantity: req.Quantity,
@@ -224,13 +239,8 @@ func main() {
 			ctx.JSON(http.StatusOK, gin.H{"data": resp})
 		})
 
-		v1.GET("/cart/list", func(ctx *gin.Context) {
-			userIdStr := ctx.Query("user_id")
-			userId, _ := strconv.ParseInt(userIdStr, 10, 64)
-			if userId == 0 {
-				ctx.JSON(http.StatusBadRequest, gin.H{"error": "user_id is required"})
-				return
-			}
+		authed.GET("/cart/list", func(ctx *gin.Context) {
+			userId := ctx.MustGet("userId").(int64)
 
 			rpcCtx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
@@ -247,20 +257,15 @@ func main() {
 		})
 
 		// ----------- 订单相关 -----------
-		v1.POST("/order/create", func(ctx *gin.Context) {
-			var req struct {
-				UserId int64 `json:"user_id" binding:"required"`
-			}
-			if err := ctx.ShouldBindJSON(&req); err != nil {
-				ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-				return
-			}
+		authed.POST("/order/create", func(ctx *gin.Context) {
+			// 下单只需 Token，无需额外参数
+			userId := ctx.MustGet("userId").(int64)
 
 			rpcCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
 			resp, err := orderClient.CreateOrder(rpcCtx, &order.CreateOrderRequest{
-				UserId: req.UserId,
+				UserId: userId,
 			})
 			if err != nil {
 				log.Printf("Create Order Error: %v", err)
@@ -270,9 +275,8 @@ func main() {
 			ctx.JSON(http.StatusOK, gin.H{"data": resp})
 		})
 
-		v1.GET("/order/list", func(ctx *gin.Context) {
-			userIdStr := ctx.Query("user_id")
-			userId, _ := strconv.ParseInt(userIdStr, 10, 64)
+		authed.GET("/order/list", func(ctx *gin.Context) {
+			userId := ctx.MustGet("userId").(int64)
 
 			rpcCtx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
@@ -287,16 +291,19 @@ func main() {
 			ctx.JSON(http.StatusOK, gin.H{"data": resp})
 		})
 
-		// ----------- 支付相关 [新增] -----------
-		v1.POST("/payment/pay", func(ctx *gin.Context) {
+		// ----------- 支付相关 -----------
+		authed.POST("/payment/pay", func(ctx *gin.Context) {
 			var req struct {
 				OrderNo string  `json:"order_no" binding:"required"`
-				Amount  float32 `json:"amount"` // 前端可传支付金额，或者后端查
+				Amount  float32 `json:"amount"`
 			}
 			if err := ctx.ShouldBindJSON(&req); err != nil {
 				ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 				return
 			}
+
+			// 可以在这里校验一下 Order 是否属于 ctx.MustGet("userId")
+			// 这里先保持简化逻辑
 
 			rpcCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()

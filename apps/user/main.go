@@ -14,6 +14,7 @@ import (
 	"go-ecommerce/pkg/config"
 	"go-ecommerce/pkg/database"
 	"go-ecommerce/pkg/discovery"
+	"go-ecommerce/pkg/jwt" // [新增] 引入 JWT 工具包
 	"go-ecommerce/pkg/utils"
 	"go-ecommerce/proto/user"
 
@@ -46,13 +47,17 @@ func (s *server) Login(ctx context.Context, req *user.LoginRequest) (*user.Login
 		return &user.LoginResponse{Code: 2, Msg: "Incorrect password"}, nil
 	}
 
-	// 3. 生成 Token (这里先简单模拟，Phase 2 再做 JWT 工具类)
-	token := "jwt-token-placeholder-" + req.Username
+	// 3. [修改] 生成真实的 JWT Token
+	token, err := jwt.GenerateToken(int64(u.ID), u.Username)
+	if err != nil {
+		log.Printf("Error generating token: %v", err)
+		return nil, status.Error(codes.Internal, "Failed to generate token")
+	}
 
 	return &user.LoginResponse{
 		Code:   0,
 		Msg:    "Login Success",
-		Token:  token,
+		Token:  token, // 返回真实的 Token
 		UserId: int64(u.ID),
 	}, nil
 }
@@ -116,6 +121,7 @@ func main() {
 	}
 
 	// 4. 注册到 Consul
+	// 注意：在 Docker 环境中，确保 RegisterService 内部获取的是容器 IP
 	err = discovery.RegisterService(c.Service.Name, c.Service.Port, c.Consul.Address)
 	if err != nil {
 		log.Fatalf("Failed to register service: %v", err)
