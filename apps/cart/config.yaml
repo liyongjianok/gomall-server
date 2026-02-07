@@ -1,0 +1,20 @@
+service:
+  name: "cart-service"
+  port: 50053  # Cart Service 端口
+
+consul:
+  address: "localhost:8500"
+
+# Redis 配置 (Cart Service 只需要这个)
+redis:
+  address: "localhost:6379"
+  password: ""
+  db: 0
+
+# MySQL 配置 (Cart Service 其实不需要，但为了代码兼容性如果不删 LoadConfig 里的结构体，留空即可，或者复用结构)
+mysql:
+  host: "localhost"
+  port: 3306
+  user: "root"
+  password: "root"
+  dbname: ""
