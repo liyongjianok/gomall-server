@@ -9,6 +9,8 @@ service ProductService {
   rpc ListProducts(ListProductsRequest) returns (ListProductsResponse);
   // 获取商品详情
   rpc GetProduct(GetProductRequest) returns (GetProductResponse);
+  // 批量扣减库存
+  rpc DecreaseStock(DecreaseStockRequest) returns (DecreaseStockResponse);
 }
 
 message Product {
@@ -47,4 +49,17 @@ message Sku {
   float price = 4;
   int32 stock = 5;
   string picture = 6;
+}
+
+message DecreaseStockRequest {
+  repeated StockInfo requests = 1;
+}
+
+message StockInfo {
+  int64 sku_id = 1;
+  int32 count = 2; // 扣减数量
+}
+
+message DecreaseStockResponse {
+  bool success = 1;
 }

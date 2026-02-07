@@ -10,6 +10,7 @@ import (
 
 	"go-ecommerce/pkg/config"
 	"go-ecommerce/proto/cart"
+	"go-ecommerce/proto/order"
 	"go-ecommerce/proto/product"
 	"go-ecommerce/proto/user"
 
@@ -70,6 +71,21 @@ func main() {
 	}
 	defer cartConn.Close()
 	cartClient := cart.NewCartServiceClient(cartConn)
+
+	// ==========================================
+	// 初始化 gRPC 连接 (Order Service) [新增]
+	// ==========================================
+	orderTarget := fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "order-service")
+	orderConn, err := grpc.Dial(
+		orderTarget,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy": "round_robin"}`),
+	)
+	if err != nil {
+		log.Fatalf("did not connect order-service: %v", err)
+	}
+	defer orderConn.Close()
+	orderClient := order.NewOrderServiceClient(orderConn)
 
 	// ==========================================
 	// 启动 Gin 路由
@@ -212,6 +228,47 @@ func main() {
 			if err != nil {
 				log.Printf("Cart Get Error: %v", err)
 				ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get cart"})
+				return
+			}
+			ctx.JSON(http.StatusOK, gin.H{"data": resp})
+		})
+
+		// ----------- 订单相关 [新增] -----------
+		v1.POST("/order/create", func(ctx *gin.Context) {
+			var req struct {
+				UserId int64 `json:"user_id" binding:"required"`
+			}
+			if err := ctx.ShouldBindJSON(&req); err != nil {
+				ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+
+			rpcCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second) // 下单可能慢，超时设置长一点
+			defer cancel()
+
+			resp, err := orderClient.CreateOrder(rpcCtx, &order.CreateOrderRequest{
+				UserId: req.UserId,
+			})
+			if err != nil {
+				log.Printf("Create Order Error: %v", err)
+				ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create order"})
+				return
+			}
+			ctx.JSON(http.StatusOK, gin.H{"data": resp})
+		})
+
+		v1.GET("/order/list", func(ctx *gin.Context) {
+			userIdStr := ctx.Query("user_id")
+			userId, _ := strconv.ParseInt(userIdStr, 10, 64)
+
+			rpcCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+
+			resp, err := orderClient.ListOrders(rpcCtx, &order.ListOrdersRequest{
+				UserId: userId,
+			})
+			if err != nil {
+				ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list orders"})
 				return
 			}
 			ctx.JSON(http.StatusOK, gin.H{"data": resp})

@@ -1,0 +1,18 @@
+service:
+  name: "order-service"
+  port: 50054
+
+consul:
+  address: "localhost:8500"
+
+mysql:
+  host: "localhost"
+  port: 3306
+  user: "root"
+  password: "root"
+  dbname: "db_order"
+
+redis:
+  address: "localhost:6379"
+  password: ""
+  db: 0

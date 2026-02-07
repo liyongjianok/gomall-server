@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package order;
+
+option go_package = "go-ecommerce/proto/order;order";
+
+service OrderService {
+  // 创建订单
+  rpc CreateOrder(CreateOrderRequest) returns (CreateOrderResponse);
+  // 获取订单列表
+  rpc ListOrders(ListOrdersRequest) returns (ListOrdersResponse);
+}
+
+message CreateOrderRequest {
+  int64 user_id = 1;
+  // 实际上只需传 UserID，后端会去 Redis 查购物车，然后生成订单
+}
+
+message CreateOrderResponse {
+  string order_no = 1; // 返回订单号
+  float total_amount = 2;
+}
+
+message ListOrdersRequest {
+  int64 user_id = 1;
+}
+
+message ListOrdersResponse {
+  repeated OrderInfo orders = 1;
+}
+
+message OrderInfo {
+  string order_no = 1;
+  float total_amount = 2;
+  int32 status = 3;
+  repeated OrderItem items = 4;
+}
+
+message OrderItem {
+  string product_name = 1;
+  string sku_name = 2;
+  float price = 3;
+  int32 quantity = 4;
+}

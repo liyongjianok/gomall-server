@@ -112,6 +112,41 @@ func (s *server) GetProduct(ctx context.Context, req *product.GetProductRequest)
 	}, nil
 }
 
+// DecreaseStock 扣减库存 (事务处理)
+func (s *server) DecreaseStock(ctx context.Context, req *product.DecreaseStockRequest) (*product.DecreaseStockResponse, error) {
+	// 开启事务
+	tx := s.db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	for _, item := range req.Requests {
+		var sku model.Sku
+		// 悲观锁 (FOR UPDATE) 锁住这行记录，防止并发超卖
+		if err := tx.Set("gorm:query_option", "FOR UPDATE").First(&sku, item.SkuId).Error; err != nil {
+			tx.Rollback()
+			return nil, status.Error(codes.NotFound, "Sku not found")
+		}
+
+		if sku.Stock < int(item.Count) {
+			tx.Rollback()
+			return nil, status.Error(codes.FailedPrecondition, "Stock not enough")
+		}
+
+		// 扣减
+		sku.Stock -= int(item.Count)
+		if err := tx.Save(&sku).Error; err != nil {
+			tx.Rollback()
+			return nil, status.Error(codes.Internal, "Failed to update stock")
+		}
+	}
+
+	tx.Commit()
+	return &product.DecreaseStockResponse{Success: true}, nil
+}
+
 func main() {
 	// 1. 加载配置 (假设 product 和 user 用类似的配置结构，或复用)
 	// 这里为了方便，我们直接读取 config.yaml，你需要在 apps/product 下创建它
