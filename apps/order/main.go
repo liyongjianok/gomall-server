@@ -158,6 +158,16 @@ func (s *server) ListOrders(ctx context.Context, req *order.ListOrdersRequest) (
 	return &order.ListOrdersResponse{Orders: protoOrders}, nil
 }
 
+// MarkOrderPaid 支付成功回调
+func (s *server) MarkOrderPaid(ctx context.Context, req *order.MarkOrderPaidRequest) (*order.MarkOrderPaidResponse, error) {
+	// 更新数据库状态 status = 1 (已支付)
+	result := s.db.Model(&model.Order{}).Where("order_no = ?", req.OrderNo).Update("status", 1)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return &order.MarkOrderPaidResponse{Success: true}, nil
+}
+
 func main() {
 	// 1. 加载配置
 	c, err := config.LoadConfig(".")

@@ -1,0 +1,13 @@
+service:
+  name: "payment-service"
+  port: 50055
+
+consul:
+  address: "localhost:8500"
+
+# 占位符，防止 LoadConfig 报错
+mysql:
+  host: "localhost"
+  port: 3306
+redis:
+  address: "localhost:6379"

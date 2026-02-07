@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package payment;
+
+option go_package = "go-ecommerce/proto/payment;payment";
+
+service PaymentService {
+  // 发起支付
+  rpc Pay(PayRequest) returns (PayResponse);
+}
+
+message PayRequest {
+  string order_no = 1;
+  float amount = 2; // 支付金额
+}
+
+message PayResponse {
+  bool success = 1;
+  string transaction_id = 2; // 模拟的银行流水号
+}

@@ -11,6 +11,7 @@ import (
 	"go-ecommerce/pkg/config"
 	"go-ecommerce/proto/cart"
 	"go-ecommerce/proto/order"
+	"go-ecommerce/proto/payment"
 	"go-ecommerce/proto/product"
 	"go-ecommerce/proto/user"
 
@@ -58,7 +59,7 @@ func main() {
 	productClient := product.NewProductServiceClient(productConn)
 
 	// ==========================================
-	// 初始化 gRPC 连接 (Cart Service) [新增]
+	// 初始化 gRPC 连接 (Cart Service)
 	// ==========================================
 	cartTarget := fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "cart-service")
 	cartConn, err := grpc.Dial(
@@ -73,7 +74,7 @@ func main() {
 	cartClient := cart.NewCartServiceClient(cartConn)
 
 	// ==========================================
-	// 初始化 gRPC 连接 (Order Service) [新增]
+	// 初始化 gRPC 连接 (Order Service)
 	// ==========================================
 	orderTarget := fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "order-service")
 	orderConn, err := grpc.Dial(
@@ -86,6 +87,21 @@ func main() {
 	}
 	defer orderConn.Close()
 	orderClient := order.NewOrderServiceClient(orderConn)
+
+	// ==========================================
+	// 初始化 gRPC 连接 (Payment Service) [新增]
+	// ==========================================
+	paymentTarget := fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "payment-service")
+	paymentConn, err := grpc.Dial(
+		paymentTarget,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy": "round_robin"}`),
+	)
+	if err != nil {
+		log.Fatalf("did not connect payment-service: %v", err)
+	}
+	defer paymentConn.Close()
+	paymentClient := payment.NewPaymentServiceClient(paymentConn)
 
 	// ==========================================
 	// 启动 Gin 路由
@@ -178,12 +194,10 @@ func main() {
 			ctx.JSON(http.StatusOK, gin.H{"data": resp})
 		})
 
-		// ----------- 购物车相关 [新增] -----------
-
-		// 添加商品到购物车
+		// ----------- 购物车相关 -----------
 		v1.POST("/cart/add", func(ctx *gin.Context) {
 			var req struct {
-				UserId   int64 `json:"user_id" binding:"required"` // 暂时手动传 UserID，后续应从 Token 解析
+				UserId   int64 `json:"user_id" binding:"required"`
 				SkuId    int64 `json:"sku_id" binding:"required"`
 				Quantity int32 `json:"quantity" binding:"required"`
 			}
@@ -210,9 +224,8 @@ func main() {
 			ctx.JSON(http.StatusOK, gin.H{"data": resp})
 		})
 
-		// 获取购物车列表
 		v1.GET("/cart/list", func(ctx *gin.Context) {
-			userIdStr := ctx.Query("user_id") // 暂时从 Query 获取
+			userIdStr := ctx.Query("user_id")
 			userId, _ := strconv.ParseInt(userIdStr, 10, 64)
 			if userId == 0 {
 				ctx.JSON(http.StatusBadRequest, gin.H{"error": "user_id is required"})
@@ -233,7 +246,7 @@ func main() {
 			ctx.JSON(http.StatusOK, gin.H{"data": resp})
 		})
 
-		// ----------- 订单相关 [新增] -----------
+		// ----------- 订单相关 -----------
 		v1.POST("/order/create", func(ctx *gin.Context) {
 			var req struct {
 				UserId int64 `json:"user_id" binding:"required"`
@@ -243,7 +256,7 @@ func main() {
 				return
 			}
 
-			rpcCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second) // 下单可能慢，超时设置长一点
+			rpcCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
 			resp, err := orderClient.CreateOrder(rpcCtx, &order.CreateOrderRequest{
@@ -269,6 +282,32 @@ func main() {
 			})
 			if err != nil {
 				ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list orders"})
+				return
+			}
+			ctx.JSON(http.StatusOK, gin.H{"data": resp})
+		})
+
+		// ----------- 支付相关 [新增] -----------
+		v1.POST("/payment/pay", func(ctx *gin.Context) {
+			var req struct {
+				OrderNo string  `json:"order_no" binding:"required"`
+				Amount  float32 `json:"amount"` // 前端可传支付金额，或者后端查
+			}
+			if err := ctx.ShouldBindJSON(&req); err != nil {
+				ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+
+			rpcCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+
+			resp, err := paymentClient.Pay(rpcCtx, &payment.PayRequest{
+				OrderNo: req.OrderNo,
+				Amount:  req.Amount,
+			})
+			if err != nil {
+				log.Printf("Payment Error: %v", err)
+				ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Payment failed"})
 				return
 			}
 			ctx.JSON(http.StatusOK, gin.H{"data": resp})

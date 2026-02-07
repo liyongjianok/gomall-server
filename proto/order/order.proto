@@ -9,6 +9,8 @@ service OrderService {
   rpc CreateOrder(CreateOrderRequest) returns (CreateOrderResponse);
   // 获取订单列表
   rpc ListOrders(ListOrdersRequest) returns (ListOrdersResponse);
+  // 标记订单为已支付 (供 Payment Service 调用)
+  rpc MarkOrderPaid(MarkOrderPaidRequest) returns (MarkOrderPaidResponse);
 }
 
 message CreateOrderRequest {
@@ -41,4 +43,12 @@ message OrderItem {
   string sku_name = 2;
   float price = 3;
   int32 quantity = 4;
+}
+
+message MarkOrderPaidRequest {
+  string order_no = 1;
+}
+
+message MarkOrderPaidResponse {
+  bool success = 1;
 }

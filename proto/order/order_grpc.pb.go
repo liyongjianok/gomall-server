@@ -19,8 +19,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	OrderService_CreateOrder_FullMethodName = "/order.OrderService/CreateOrder"
-	OrderService_ListOrders_FullMethodName  = "/order.OrderService/ListOrders"
+	OrderService_CreateOrder_FullMethodName   = "/order.OrderService/CreateOrder"
+	OrderService_ListOrders_FullMethodName    = "/order.OrderService/ListOrders"
+	OrderService_MarkOrderPaid_FullMethodName = "/order.OrderService/MarkOrderPaid"
 )
 
 // OrderServiceClient is the client API for OrderService service.
@@ -31,6 +32,8 @@ type OrderServiceClient interface {
 	CreateOrder(ctx context.Context, in *CreateOrderRequest, opts ...grpc.CallOption) (*CreateOrderResponse, error)
 	// 获取订单列表
 	ListOrders(ctx context.Context, in *ListOrdersRequest, opts ...grpc.CallOption) (*ListOrdersResponse, error)
+	// 标记订单为已支付 (供 Payment Service 调用)
+	MarkOrderPaid(ctx context.Context, in *MarkOrderPaidRequest, opts ...grpc.CallOption) (*MarkOrderPaidResponse, error)
 }
 
 type orderServiceClient struct {
@@ -61,6 +64,16 @@ func (c *orderServiceClient) ListOrders(ctx context.Context, in *ListOrdersReque
 	return out, nil
 }
 
+func (c *orderServiceClient) MarkOrderPaid(ctx context.Context, in *MarkOrderPaidRequest, opts ...grpc.CallOption) (*MarkOrderPaidResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MarkOrderPaidResponse)
+	err := c.cc.Invoke(ctx, OrderService_MarkOrderPaid_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // OrderServiceServer is the server API for OrderService service.
 // All implementations must embed UnimplementedOrderServiceServer
 // for forward compatibility.
@@ -69,6 +82,8 @@ type OrderServiceServer interface {
 	CreateOrder(context.Context, *CreateOrderRequest) (*CreateOrderResponse, error)
 	// 获取订单列表
 	ListOrders(context.Context, *ListOrdersRequest) (*ListOrdersResponse, error)
+	// 标记订单为已支付 (供 Payment Service 调用)
+	MarkOrderPaid(context.Context, *MarkOrderPaidRequest) (*MarkOrderPaidResponse, error)
 	mustEmbedUnimplementedOrderServiceServer()
 }
 
@@ -84,6 +99,9 @@ func (UnimplementedOrderServiceServer) CreateOrder(context.Context, *CreateOrder
 }
 func (UnimplementedOrderServiceServer) ListOrders(context.Context, *ListOrdersRequest) (*ListOrdersResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListOrders not implemented")
+}
+func (UnimplementedOrderServiceServer) MarkOrderPaid(context.Context, *MarkOrderPaidRequest) (*MarkOrderPaidResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method MarkOrderPaid not implemented")
 }
 func (UnimplementedOrderServiceServer) mustEmbedUnimplementedOrderServiceServer() {}
 func (UnimplementedOrderServiceServer) testEmbeddedByValue()                      {}
@@ -142,6 +160,24 @@ func _OrderService_ListOrders_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _OrderService_MarkOrderPaid_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MarkOrderPaidRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrderServiceServer).MarkOrderPaid(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: OrderService_MarkOrderPaid_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrderServiceServer).MarkOrderPaid(ctx, req.(*MarkOrderPaidRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // OrderService_ServiceDesc is the grpc.ServiceDesc for OrderService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -156,6 +192,10 @@ var OrderService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListOrders",
 			Handler:    _OrderService_ListOrders_Handler,
+		},
+		{
+			MethodName: "MarkOrderPaid",
+			Handler:    _OrderService_MarkOrderPaid_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

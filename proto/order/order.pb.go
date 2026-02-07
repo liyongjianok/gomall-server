@@ -341,6 +341,94 @@ func (x *OrderItem) GetQuantity() int32 {
 	return 0
 }
 
+type MarkOrderPaidRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OrderNo       string                 `protobuf:"bytes,1,opt,name=order_no,json=orderNo,proto3" json:"order_no,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MarkOrderPaidRequest) Reset() {
+	*x = MarkOrderPaidRequest{}
+	mi := &file_proto_order_order_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MarkOrderPaidRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MarkOrderPaidRequest) ProtoMessage() {}
+
+func (x *MarkOrderPaidRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_order_order_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MarkOrderPaidRequest.ProtoReflect.Descriptor instead.
+func (*MarkOrderPaidRequest) Descriptor() ([]byte, []int) {
+	return file_proto_order_order_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *MarkOrderPaidRequest) GetOrderNo() string {
+	if x != nil {
+		return x.OrderNo
+	}
+	return ""
+}
+
+type MarkOrderPaidResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MarkOrderPaidResponse) Reset() {
+	*x = MarkOrderPaidResponse{}
+	mi := &file_proto_order_order_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MarkOrderPaidResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MarkOrderPaidResponse) ProtoMessage() {}
+
+func (x *MarkOrderPaidResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_order_order_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MarkOrderPaidResponse.ProtoReflect.Descriptor instead.
+func (*MarkOrderPaidResponse) Descriptor() ([]byte, []int) {
+	return file_proto_order_order_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *MarkOrderPaidResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
 var File_proto_order_order_proto protoreflect.FileDescriptor
 
 const file_proto_order_order_proto_rawDesc = "" +
@@ -364,11 +452,16 @@ const file_proto_order_order_proto_rawDesc = "" +
 	"\fproduct_name\x18\x01 \x01(\tR\vproductName\x12\x19\n" +
 	"\bsku_name\x18\x02 \x01(\tR\askuName\x12\x14\n" +
 	"\x05price\x18\x03 \x01(\x02R\x05price\x12\x1a\n" +
-	"\bquantity\x18\x04 \x01(\x05R\bquantity2\x97\x01\n" +
+	"\bquantity\x18\x04 \x01(\x05R\bquantity\"1\n" +
+	"\x14MarkOrderPaidRequest\x12\x19\n" +
+	"\border_no\x18\x01 \x01(\tR\aorderNo\"1\n" +
+	"\x15MarkOrderPaidResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess2\xe3\x01\n" +
 	"\fOrderService\x12D\n" +
 	"\vCreateOrder\x12\x19.order.CreateOrderRequest\x1a\x1a.order.CreateOrderResponse\x12A\n" +
 	"\n" +
-	"ListOrders\x12\x18.order.ListOrdersRequest\x1a\x19.order.ListOrdersResponseB Z\x1ego-ecommerce/proto/order;orderb\x06proto3"
+	"ListOrders\x12\x18.order.ListOrdersRequest\x1a\x19.order.ListOrdersResponse\x12J\n" +
+	"\rMarkOrderPaid\x12\x1b.order.MarkOrderPaidRequest\x1a\x1c.order.MarkOrderPaidResponseB Z\x1ego-ecommerce/proto/order;orderb\x06proto3"
 
 var (
 	file_proto_order_order_proto_rawDescOnce sync.Once
@@ -382,24 +475,28 @@ func file_proto_order_order_proto_rawDescGZIP() []byte {
 	return file_proto_order_order_proto_rawDescData
 }
 
-var file_proto_order_order_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_proto_order_order_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_proto_order_order_proto_goTypes = []any{
-	(*CreateOrderRequest)(nil),  // 0: order.CreateOrderRequest
-	(*CreateOrderResponse)(nil), // 1: order.CreateOrderResponse
-	(*ListOrdersRequest)(nil),   // 2: order.ListOrdersRequest
-	(*ListOrdersResponse)(nil),  // 3: order.ListOrdersResponse
-	(*OrderInfo)(nil),           // 4: order.OrderInfo
-	(*OrderItem)(nil),           // 5: order.OrderItem
+	(*CreateOrderRequest)(nil),    // 0: order.CreateOrderRequest
+	(*CreateOrderResponse)(nil),   // 1: order.CreateOrderResponse
+	(*ListOrdersRequest)(nil),     // 2: order.ListOrdersRequest
+	(*ListOrdersResponse)(nil),    // 3: order.ListOrdersResponse
+	(*OrderInfo)(nil),             // 4: order.OrderInfo
+	(*OrderItem)(nil),             // 5: order.OrderItem
+	(*MarkOrderPaidRequest)(nil),  // 6: order.MarkOrderPaidRequest
+	(*MarkOrderPaidResponse)(nil), // 7: order.MarkOrderPaidResponse
 }
 var file_proto_order_order_proto_depIdxs = []int32{
 	4, // 0: order.ListOrdersResponse.orders:type_name -> order.OrderInfo
 	5, // 1: order.OrderInfo.items:type_name -> order.OrderItem
 	0, // 2: order.OrderService.CreateOrder:input_type -> order.CreateOrderRequest
 	2, // 3: order.OrderService.ListOrders:input_type -> order.ListOrdersRequest
-	1, // 4: order.OrderService.CreateOrder:output_type -> order.CreateOrderResponse
-	3, // 5: order.OrderService.ListOrders:output_type -> order.ListOrdersResponse
-	4, // [4:6] is the sub-list for method output_type
-	2, // [2:4] is the sub-list for method input_type
+	6, // 4: order.OrderService.MarkOrderPaid:input_type -> order.MarkOrderPaidRequest
+	1, // 5: order.OrderService.CreateOrder:output_type -> order.CreateOrderResponse
+	3, // 6: order.OrderService.ListOrders:output_type -> order.ListOrdersResponse
+	7, // 7: order.OrderService.MarkOrderPaid:output_type -> order.MarkOrderPaidResponse
+	5, // [5:8] is the sub-list for method output_type
+	2, // [2:5] is the sub-list for method input_type
 	2, // [2:2] is the sub-list for extension type_name
 	2, // [2:2] is the sub-list for extension extendee
 	0, // [0:2] is the sub-list for field type_name
@@ -416,7 +513,7 @@ func file_proto_order_order_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_order_order_proto_rawDesc), len(file_proto_order_order_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   6,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
