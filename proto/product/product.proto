@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package product;
+
+option go_package = "go-ecommerce/proto/product;product";
+
+service ProductService {
+  // 获取商品列表
+  rpc ListProducts(ListProductsRequest) returns (ListProductsResponse);
+  // 获取商品详情
+  rpc GetProduct(GetProductRequest) returns (GetProductResponse);
+}
+
+message Product {
+  int64 id = 1;
+  string name = 2;
+  string description = 3;
+  string picture = 4;
+  float price = 5;
+  int64 category_id = 6;
+}
+
+message ListProductsRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  int64 category_id = 3; // 可选：按分类筛选
+}
+
+message ListProductsResponse {
+  repeated Product products = 1;
+  int64 total = 2;
+}
+
+message GetProductRequest {
+  int64 id = 1;
+}
+
+message GetProductResponse {
+  Product product = 1;
+  repeated Sku skus = 2; // 详情页通常包含 SKU 信息
+}
+
+message Sku {
+  int64 id = 1;
+  int64 product_id = 2;
+  string name = 3;
+  float price = 4;
+  int32 stock = 5;
+  string picture = 6;
+}

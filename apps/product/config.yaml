@@ -1,0 +1,18 @@
+service:
+  name: "product-service"
+  port: 50052  # 修改端口
+
+consul:
+  address: "localhost:8500"
+
+mysql:
+  host: "localhost"
+  port: 3306
+  user: "root"
+  password: "root"
+  dbname: "db_product" # 修改库名
+
+redis:
+  address: "localhost:6379"
+  password: ""
+  db: 0
