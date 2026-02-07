@@ -1,0 +1,18 @@
+service:
+  name: "user-service"
+  port: 50051
+
+consul:
+  address: "localhost:8500"  # 如果在 docker 内跑 go，这里可能需要填 host.docker.internal:8500 或真实IP
+
+mysql:
+  host: "localhost"
+  port: 3306
+  user: "root"
+  password: "root"
+  dbname: "db_user"
+
+redis:
+  address: "localhost:6379"
+  password: ""
+  db: 0

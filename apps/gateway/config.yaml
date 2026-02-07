@@ -1,0 +1,6 @@
+service:
+  name: "gateway"
+  port: 8080
+
+consul:
+  address: "localhost:8500"
