@@ -137,7 +137,8 @@ func (s *server) DecreaseStock(ctx context.Context, req *product.DecreaseStockRe
 
 		// 扣减
 		sku.Stock -= int(item.Count)
-		if err := tx.Save(&sku).Error; err != nil {
+		if err := tx.Model(&sku).Update("stock", sku.Stock).Error; err != nil {
+			log.Printf("DecreaseStock DB Error: %v", err) // <--- 加这一行！看看到底报什么错！
 			tx.Rollback()
 			return nil, status.Error(codes.Internal, "Failed to update stock")
 		}

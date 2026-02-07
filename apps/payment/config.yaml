@@ -3,11 +3,11 @@ service:
   port: 50055
 
 consul:
-  address: "localhost:8500"
+  address: "consul:8500"
 
 # 占位符，防止 LoadConfig 报错
 mysql:
-  host: "localhost"
+  host: "mysql"
   port: 3306
 redis:
-  address: "localhost:6379"
+  address: "redis:6379"

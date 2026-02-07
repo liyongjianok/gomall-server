@@ -1,0 +1,109 @@
+version: '3.8'
+
+services:
+  # ==================== 基础设施 ====================
+  consul:
+    image: consul:1.15
+    container_name: deploy-consul
+    ports:
+      - "8500:8500"
+    command: agent -server -bind=0.0.0.0 -client=0.0.0.0 -bootstrap-expect=1 -ui
+
+  mysql:
+    image: mysql:8.0
+    container_name: deploy-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./deploy/mysql-init:/docker-entrypoint-initdb.d
+      - mysql_data:/var/lib/mysql # 数据持久化
+
+  redis:
+    image: redis:7.0
+    container_name: deploy-redis
+    ports:
+      - "6379:6379"
+
+  # ==================== 微服务 ====================
+  user-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_PATH: apps/user
+    depends_on:
+      - consul
+      - mysql
+    ports:
+      - "50051:50051" # 暴露端口方便本地调试，生产环境可不暴露
+
+  product-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_PATH: apps/product
+    depends_on:
+      - consul
+      - mysql
+    ports:
+      - "50052:50052"
+
+  cart-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_PATH: apps/cart
+    depends_on:
+      - consul
+      - redis
+    ports:
+      - "50053:50053"
+
+  order-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_PATH: apps/order
+    depends_on:
+      - consul
+      - mysql
+      - user-service # 等这些服务启动了再启动
+      - product-service
+      - cart-service
+    ports:
+      - "50054:50054"
+
+  payment-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_PATH: apps/payment
+    depends_on:
+      - consul
+      - order-service
+    ports:
+      - "50055:50055"
+
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_PATH: apps/gateway
+    depends_on:
+      - consul
+      - user-service
+      - product-service
+      - cart-service
+      - order-service
+    ports:
+      - "8080:8080" # 网关必须暴露
+
+volumes:
+  mysql_data:

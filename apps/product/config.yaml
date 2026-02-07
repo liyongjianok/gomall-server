@@ -3,16 +3,16 @@ service:
   port: 50052  # 修改端口
 
 consul:
-  address: "localhost:8500"
+  address: "consul:8500"
 
 mysql:
-  host: "localhost"
+  host: "mysql"
   port: 3306
   user: "root"
   password: "root"
   dbname: "db_product" # 修改库名
 
 redis:
-  address: "localhost:6379"
+  address: "redis:6379"
   password: ""
   db: 0

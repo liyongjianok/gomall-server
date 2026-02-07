@@ -3,16 +3,16 @@ service:
   port: 50054
 
 consul:
-  address: "localhost:8500"
+  address: "consul:8500"
 
 mysql:
-  host: "localhost"
+  host: "mysql"
   port: 3306
   user: "root"
   password: "root"
   dbname: "db_order"
 
 redis:
-  address: "localhost:6379"
+  address: "redis:6379"
   password: ""
   db: 0

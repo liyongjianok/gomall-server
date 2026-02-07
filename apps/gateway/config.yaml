@@ -3,4 +3,4 @@ service:
   port: 8080
 
 consul:
-  address: "localhost:8500"
+  address: "consul:8500"
