@@ -19,10 +19,11 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ProductService_ListProducts_FullMethodName  = "/product.ProductService/ListProducts"
-	ProductService_GetProduct_FullMethodName    = "/product.ProductService/GetProduct"
-	ProductService_DecreaseStock_FullMethodName = "/product.ProductService/DecreaseStock"
-	ProductService_RollbackStock_FullMethodName = "/product.ProductService/RollbackStock"
+	ProductService_ListProducts_FullMethodName   = "/product.ProductService/ListProducts"
+	ProductService_GetProduct_FullMethodName     = "/product.ProductService/GetProduct"
+	ProductService_DecreaseStock_FullMethodName  = "/product.ProductService/DecreaseStock"
+	ProductService_RollbackStock_FullMethodName  = "/product.ProductService/RollbackStock"
+	ProductService_SeckillProduct_FullMethodName = "/product.ProductService/SeckillProduct"
 )
 
 // ProductServiceClient is the client API for ProductService service.
@@ -33,6 +34,7 @@ type ProductServiceClient interface {
 	GetProduct(ctx context.Context, in *GetProductRequest, opts ...grpc.CallOption) (*GetProductResponse, error)
 	DecreaseStock(ctx context.Context, in *DecreaseStockRequest, opts ...grpc.CallOption) (*DecreaseStockResponse, error)
 	RollbackStock(ctx context.Context, in *RollbackStockRequest, opts ...grpc.CallOption) (*RollbackStockResponse, error)
+	SeckillProduct(ctx context.Context, in *SeckillProductRequest, opts ...grpc.CallOption) (*SeckillProductResponse, error)
 }
 
 type productServiceClient struct {
@@ -83,6 +85,16 @@ func (c *productServiceClient) RollbackStock(ctx context.Context, in *RollbackSt
 	return out, nil
 }
 
+func (c *productServiceClient) SeckillProduct(ctx context.Context, in *SeckillProductRequest, opts ...grpc.CallOption) (*SeckillProductResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SeckillProductResponse)
+	err := c.cc.Invoke(ctx, ProductService_SeckillProduct_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ProductServiceServer is the server API for ProductService service.
 // All implementations must embed UnimplementedProductServiceServer
 // for forward compatibility.
@@ -91,6 +103,7 @@ type ProductServiceServer interface {
 	GetProduct(context.Context, *GetProductRequest) (*GetProductResponse, error)
 	DecreaseStock(context.Context, *DecreaseStockRequest) (*DecreaseStockResponse, error)
 	RollbackStock(context.Context, *RollbackStockRequest) (*RollbackStockResponse, error)
+	SeckillProduct(context.Context, *SeckillProductRequest) (*SeckillProductResponse, error)
 	mustEmbedUnimplementedProductServiceServer()
 }
 
@@ -112,6 +125,9 @@ func (UnimplementedProductServiceServer) DecreaseStock(context.Context, *Decreas
 }
 func (UnimplementedProductServiceServer) RollbackStock(context.Context, *RollbackStockRequest) (*RollbackStockResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RollbackStock not implemented")
+}
+func (UnimplementedProductServiceServer) SeckillProduct(context.Context, *SeckillProductRequest) (*SeckillProductResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SeckillProduct not implemented")
 }
 func (UnimplementedProductServiceServer) mustEmbedUnimplementedProductServiceServer() {}
 func (UnimplementedProductServiceServer) testEmbeddedByValue()                        {}
@@ -206,6 +222,24 @@ func _ProductService_RollbackStock_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ProductService_SeckillProduct_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SeckillProductRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProductServiceServer).SeckillProduct(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProductService_SeckillProduct_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProductServiceServer).SeckillProduct(ctx, req.(*SeckillProductRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ProductService_ServiceDesc is the grpc.ServiceDesc for ProductService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -228,6 +262,10 @@ var ProductService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RollbackStock",
 			Handler:    _ProductService_RollbackStock_Handler,
+		},
+		{
+			MethodName: "SeckillProduct",
+			Handler:    _ProductService_SeckillProduct_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

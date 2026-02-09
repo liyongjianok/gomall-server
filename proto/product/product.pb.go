@@ -578,6 +578,102 @@ func (x *RollbackStockResponse) GetSuccess() bool {
 	return false
 }
 
+type SeckillProductRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        int64                  `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	SkuId         int64                  `protobuf:"varint,2,opt,name=sku_id,json=skuId,proto3" json:"sku_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SeckillProductRequest) Reset() {
+	*x = SeckillProductRequest{}
+	mi := &file_proto_product_product_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SeckillProductRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SeckillProductRequest) ProtoMessage() {}
+
+func (x *SeckillProductRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_product_product_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SeckillProductRequest.ProtoReflect.Descriptor instead.
+func (*SeckillProductRequest) Descriptor() ([]byte, []int) {
+	return file_proto_product_product_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *SeckillProductRequest) GetUserId() int64 {
+	if x != nil {
+		return x.UserId
+	}
+	return 0
+}
+
+func (x *SeckillProductRequest) GetSkuId() int64 {
+	if x != nil {
+		return x.SkuId
+	}
+	return 0
+}
+
+type SeckillProductResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SeckillProductResponse) Reset() {
+	*x = SeckillProductResponse{}
+	mi := &file_proto_product_product_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SeckillProductResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SeckillProductResponse) ProtoMessage() {}
+
+func (x *SeckillProductResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_product_product_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SeckillProductResponse.ProtoReflect.Descriptor instead.
+func (*SeckillProductResponse) Descriptor() ([]byte, []int) {
+	return file_proto_product_product_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *SeckillProductResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
 var File_proto_product_product_proto protoreflect.FileDescriptor
 
 const file_proto_product_product_proto_rawDesc = "" +
@@ -623,13 +719,19 @@ const file_proto_product_product_proto_rawDesc = "" +
 	"\x06sku_id\x18\x01 \x01(\x03R\x05skuId\x12\x14\n" +
 	"\x05count\x18\x02 \x01(\x05R\x05count\"1\n" +
 	"\x15RollbackStockResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess2\xc4\x02\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"G\n" +
+	"\x15SeckillProductRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12\x15\n" +
+	"\x06sku_id\x18\x02 \x01(\x03R\x05skuId\"2\n" +
+	"\x16SeckillProductResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess2\x97\x03\n" +
 	"\x0eProductService\x12K\n" +
 	"\fListProducts\x12\x1c.product.ListProductsRequest\x1a\x1d.product.ListProductsResponse\x12E\n" +
 	"\n" +
 	"GetProduct\x12\x1a.product.GetProductRequest\x1a\x1b.product.GetProductResponse\x12N\n" +
 	"\rDecreaseStock\x12\x1d.product.DecreaseStockRequest\x1a\x1e.product.DecreaseStockResponse\x12N\n" +
-	"\rRollbackStock\x12\x1d.product.RollbackStockRequest\x1a\x1e.product.RollbackStockResponseB\x1cZ\x1ago-ecommerce/proto/productb\x06proto3"
+	"\rRollbackStock\x12\x1d.product.RollbackStockRequest\x1a\x1e.product.RollbackStockResponse\x12Q\n" +
+	"\x0eSeckillProduct\x12\x1e.product.SeckillProductRequest\x1a\x1f.product.SeckillProductResponseB\x1cZ\x1ago-ecommerce/proto/productb\x06proto3"
 
 var (
 	file_proto_product_product_proto_rawDescOnce sync.Once
@@ -643,33 +745,37 @@ func file_proto_product_product_proto_rawDescGZIP() []byte {
 	return file_proto_product_product_proto_rawDescData
 }
 
-var file_proto_product_product_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_proto_product_product_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_proto_product_product_proto_goTypes = []any{
-	(*ListProductsRequest)(nil),   // 0: product.ListProductsRequest
-	(*ListProductsResponse)(nil),  // 1: product.ListProductsResponse
-	(*Product)(nil),               // 2: product.Product
-	(*GetProductRequest)(nil),     // 3: product.GetProductRequest
-	(*GetProductResponse)(nil),    // 4: product.GetProductResponse
-	(*DecreaseStockRequest)(nil),  // 5: product.DecreaseStockRequest
-	(*DecreaseStockResponse)(nil), // 6: product.DecreaseStockResponse
-	(*RollbackStockRequest)(nil),  // 7: product.RollbackStockRequest
-	(*RollbackStockResponse)(nil), // 8: product.RollbackStockResponse
+	(*ListProductsRequest)(nil),    // 0: product.ListProductsRequest
+	(*ListProductsResponse)(nil),   // 1: product.ListProductsResponse
+	(*Product)(nil),                // 2: product.Product
+	(*GetProductRequest)(nil),      // 3: product.GetProductRequest
+	(*GetProductResponse)(nil),     // 4: product.GetProductResponse
+	(*DecreaseStockRequest)(nil),   // 5: product.DecreaseStockRequest
+	(*DecreaseStockResponse)(nil),  // 6: product.DecreaseStockResponse
+	(*RollbackStockRequest)(nil),   // 7: product.RollbackStockRequest
+	(*RollbackStockResponse)(nil),  // 8: product.RollbackStockResponse
+	(*SeckillProductRequest)(nil),  // 9: product.SeckillProductRequest
+	(*SeckillProductResponse)(nil), // 10: product.SeckillProductResponse
 }
 var file_proto_product_product_proto_depIdxs = []int32{
-	2, // 0: product.ListProductsResponse.products:type_name -> product.Product
-	0, // 1: product.ProductService.ListProducts:input_type -> product.ListProductsRequest
-	3, // 2: product.ProductService.GetProduct:input_type -> product.GetProductRequest
-	5, // 3: product.ProductService.DecreaseStock:input_type -> product.DecreaseStockRequest
-	7, // 4: product.ProductService.RollbackStock:input_type -> product.RollbackStockRequest
-	1, // 5: product.ProductService.ListProducts:output_type -> product.ListProductsResponse
-	4, // 6: product.ProductService.GetProduct:output_type -> product.GetProductResponse
-	6, // 7: product.ProductService.DecreaseStock:output_type -> product.DecreaseStockResponse
-	8, // 8: product.ProductService.RollbackStock:output_type -> product.RollbackStockResponse
-	5, // [5:9] is the sub-list for method output_type
-	1, // [1:5] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	2,  // 0: product.ListProductsResponse.products:type_name -> product.Product
+	0,  // 1: product.ProductService.ListProducts:input_type -> product.ListProductsRequest
+	3,  // 2: product.ProductService.GetProduct:input_type -> product.GetProductRequest
+	5,  // 3: product.ProductService.DecreaseStock:input_type -> product.DecreaseStockRequest
+	7,  // 4: product.ProductService.RollbackStock:input_type -> product.RollbackStockRequest
+	9,  // 5: product.ProductService.SeckillProduct:input_type -> product.SeckillProductRequest
+	1,  // 6: product.ProductService.ListProducts:output_type -> product.ListProductsResponse
+	4,  // 7: product.ProductService.GetProduct:output_type -> product.GetProductResponse
+	6,  // 8: product.ProductService.DecreaseStock:output_type -> product.DecreaseStockResponse
+	8,  // 9: product.ProductService.RollbackStock:output_type -> product.RollbackStockResponse
+	10, // 10: product.ProductService.SeckillProduct:output_type -> product.SeckillProductResponse
+	6,  // [6:11] is the sub-list for method output_type
+	1,  // [1:6] is the sub-list for method input_type
+	1,  // [1:1] is the sub-list for extension type_name
+	1,  // [1:1] is the sub-list for extension extendee
+	0,  // [0:1] is the sub-list for field type_name
 }
 
 func init() { file_proto_product_product_proto_init() }
@@ -683,7 +789,7 @@ func file_proto_product_product_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_product_product_proto_rawDesc), len(file_proto_product_product_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

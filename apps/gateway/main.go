@@ -310,6 +310,28 @@ func main() {
 			}
 			response.Success(ctx, resp)
 		})
+		// ----------- Seckill -----------
+		authed.POST("/product/seckill", func(ctx *gin.Context) {
+			var req struct {
+				SkuId int64 `json:"sku_id" binding:"required"`
+			}
+			if err := ctx.ShouldBindJSON(&req); err != nil {
+				response.Error(ctx, http.StatusBadRequest, err.Error())
+				return
+			}
+			userId := ctx.MustGet("userId").(int64)
+
+			resp, err := productClient.SeckillProduct(context.Background(), &product.SeckillProductRequest{
+				UserId: userId,
+				SkuId:  req.SkuId,
+			})
+			if err != nil {
+				// 这里可以直接返回 RPC 的错误信息，比如 "手慢了"
+				response.Error(ctx, http.StatusInternalServerError, err.Error())
+				return
+			}
+			response.Success(ctx, resp)
+		})
 	}
 
 	addr := fmt.Sprintf(":%d", c.Service.Port)
