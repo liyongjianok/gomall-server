@@ -12,68 +12,76 @@ import (
 
 	"go-ecommerce/pkg/config"
 	"go-ecommerce/pkg/discovery"
-	"go-ecommerce/proto/order"
+	"go-ecommerce/proto/order" // [新增] 引入 Order Proto
 	"go-ecommerce/proto/payment"
 
-	"github.com/google/uuid"
 	_ "github.com/mbobakov/grpc-consul-resolver"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
+	"google.golang.org/grpc/status"
 )
 
 type server struct {
 	payment.UnimplementedPaymentServiceServer
-	orderClient order.OrderServiceClient
+	orderClient order.OrderServiceClient // [新增] 持有 Order 客户端
 }
 
 func (s *server) Pay(ctx context.Context, req *payment.PayRequest) (*payment.PayResponse, error) {
-	log.Printf("Processing payment for Order: %s, Amount: %.2f", req.OrderNo, req.Amount)
+	log.Printf("Received payment request for Order: %s, Amount: %.2f", req.OrderNo, req.Amount)
 
-	// 1. 模拟与银行交互的耗时
-	time.Sleep(500 * time.Millisecond)
+	// 1. 模拟调用第三方支付 (支付宝/微信)
+	// 这里我们简单 sleep 1秒，假设支付成功
+	time.Sleep(1 * time.Second)
 
-	// 2. 假设银行扣款成功，生成流水号
-	txID := "TX-" + uuid.New().String()
+	// 2. 支付成功，调用 Order Service 更新订单状态
+	// 注意：这里需要传入 context，最好带超时
+	rpcCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
 
-	// 3. 回调 Order Service 修改状态
-	// 在实际系统中，这一步通常是异步的消息队列，或者由前端轮询，这里简化为同步调用
-	_, err := s.orderClient.MarkOrderPaid(ctx, &order.MarkOrderPaidRequest{
+	_, err := s.orderClient.MarkOrderPaid(rpcCtx, &order.MarkOrderPaidRequest{
 		OrderNo: req.OrderNo,
 	})
+
 	if err != nil {
-		log.Printf("Failed to update order status: %v", err)
-		// 支付成功了但订单没改状态，这在生产环境需要重试机制
-		return nil, err
+		log.Printf("CRITICAL: Payment successful but failed to update order status: %v", err)
+		// 在真实系统中，这里需要重试机制 (MQ) 或人工介入
+		return nil, status.Errorf(codes.Internal, "Payment processed but order status update failed")
 	}
 
-	log.Printf("Payment Success! Transaction ID: %s", txID)
+	log.Printf("Order %s paid successfully", req.OrderNo)
+
 	return &payment.PayResponse{
-		Success:       true,
-		TransactionId: txID,
+		Success: true,
+		TxId:    fmt.Sprintf("tx_%d", time.Now().UnixNano()), // 生成一个模拟的流水号
 	}, nil
 }
 
 func main() {
-	// 1. 加载配置
 	c, err := config.LoadConfig(".")
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	// 2. 连接 Order Service
+	// =====================================
+	// 连接 Order Service
+	// =====================================
+	orderTarget := fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "order-service")
 	orderConn, err := grpc.Dial(
-		fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "order-service"),
+		orderTarget,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy": "round_robin"}`),
 	)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("did not connect order-service: %v", err)
 	}
 	defer orderConn.Close()
 	orderClient := order.NewOrderServiceClient(orderConn)
 
-	// 3. 启动服务
+	// =====================================
+	// 启动 Payment Service
+	// =====================================
 	addr := fmt.Sprintf(":%d", c.Service.Port)
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -82,17 +90,21 @@ func main() {
 
 	err = discovery.RegisterService(c.Service.Name, c.Service.Port, c.Consul.Address)
 	if err != nil {
-		log.Fatalf("Failed to register: %v", err)
+		log.Fatalf("Failed to register service: %v", err)
 	}
 
 	s := grpc.NewServer()
-	payment.RegisterPaymentServiceServer(s, &server{orderClient: orderClient})
+	payment.RegisterPaymentServiceServer(s, &server{
+		orderClient: orderClient, // 注入 Order Client
+	})
 	reflection.Register(s)
 
 	log.Printf("Payment Service listening on %s", addr)
 
 	go func() {
-		s.Serve(lis)
+		if err := s.Serve(lis); err != nil {
+			log.Fatalf("failed to serve: %v", err)
+		}
 	}()
 
 	quit := make(chan os.Signal, 1)

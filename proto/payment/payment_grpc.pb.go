@@ -26,7 +26,6 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type PaymentServiceClient interface {
-	// 发起支付
 	Pay(ctx context.Context, in *PayRequest, opts ...grpc.CallOption) (*PayResponse, error)
 }
 
@@ -52,7 +51,6 @@ func (c *paymentServiceClient) Pay(ctx context.Context, in *PayRequest, opts ...
 // All implementations must embed UnimplementedPaymentServiceServer
 // for forward compatibility.
 type PaymentServiceServer interface {
-	// 发起支付
 	Pay(context.Context, *PayRequest) (*PayResponse, error)
 	mustEmbedUnimplementedPaymentServiceServer()
 }

@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package order;
 
-option go_package = "go-ecommerce/proto/order;order";
+option go_package = "go-ecommerce/proto/order";
 
 service OrderService {
   // 创建订单
@@ -11,15 +11,16 @@ service OrderService {
   rpc ListOrders(ListOrdersRequest) returns (ListOrdersResponse);
   // 标记订单为已支付 (供 Payment Service 调用)
   rpc MarkOrderPaid(MarkOrderPaidRequest) returns (MarkOrderPaidResponse);
+  // 取消订单
+  rpc CancelOrder(CancelOrderRequest) returns (CancelOrderResponse);
 }
 
 message CreateOrderRequest {
   int64 user_id = 1;
-  // 实际上只需传 UserID，后端会去 Redis 查购物车，然后生成订单
 }
 
 message CreateOrderResponse {
-  string order_no = 1; // 返回订单号
+  string order_no = 1; 
   float total_amount = 2;
 }
 
@@ -34,8 +35,9 @@ message ListOrdersResponse {
 message OrderInfo {
   string order_no = 1;
   float total_amount = 2;
-  int32 status = 3;
-  repeated OrderItem items = 4;
+  int32 status = 3; // 0:待支付, 1:已支付
+  string created_at = 4; // [新增] 下单时间
+  repeated OrderItem items = 5; // [保留] 你的商品详情列表
 }
 
 message OrderItem {
@@ -43,6 +45,7 @@ message OrderItem {
   string sku_name = 2;
   float price = 3;
   int32 quantity = 4;
+  string picture = 5; // [建议新增] 商品图片
 }
 
 message MarkOrderPaidRequest {
@@ -50,5 +53,14 @@ message MarkOrderPaidRequest {
 }
 
 message MarkOrderPaidResponse {
+  bool success = 1;
+}
+
+message CancelOrderRequest {
+  string order_no = 1;
+  int64 user_id = 2; // 需要校验这是谁的订单，防止恶意取消别人的
+}
+
+message CancelOrderResponse {
   bool success = 1;
 }

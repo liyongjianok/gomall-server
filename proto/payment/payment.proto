@@ -2,19 +2,18 @@ syntax = "proto3";
 
 package payment;
 
-option go_package = "go-ecommerce/proto/payment;payment";
+option go_package = "go-ecommerce/proto/payment";
 
 service PaymentService {
-  // 发起支付
   rpc Pay(PayRequest) returns (PayResponse);
 }
 
 message PayRequest {
   string order_no = 1;
-  float amount = 2; // 支付金额
+  float amount = 2;
 }
 
 message PayResponse {
   bool success = 1;
-  string transaction_id = 2; // 模拟的银行流水号
+  string tx_id = 2; // [关键] 对应 Go 里的 TxId
 }

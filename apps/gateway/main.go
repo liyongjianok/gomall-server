@@ -275,6 +275,32 @@ func main() {
 			ctx.JSON(http.StatusOK, gin.H{"data": resp})
 		})
 
+		// 取消订单
+		authed.POST("/order/cancel", func(ctx *gin.Context) {
+			var req struct {
+				OrderNo string `json:"order_no" binding:"required"`
+			}
+			if err := ctx.ShouldBindJSON(&req); err != nil {
+				ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+
+			userId := ctx.MustGet("userId").(int64)
+
+			rpcCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+
+			resp, err := orderClient.CancelOrder(rpcCtx, &order.CancelOrderRequest{
+				OrderNo: req.OrderNo,
+				UserId:  userId,
+			})
+			if err != nil {
+				ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			ctx.JSON(http.StatusOK, gin.H{"data": resp})
+		})
+
 		authed.GET("/order/list", func(ctx *gin.Context) {
 			userId := ctx.MustGet("userId").(int64)
 

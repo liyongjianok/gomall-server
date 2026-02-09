@@ -22,6 +22,7 @@ const (
 	OrderService_CreateOrder_FullMethodName   = "/order.OrderService/CreateOrder"
 	OrderService_ListOrders_FullMethodName    = "/order.OrderService/ListOrders"
 	OrderService_MarkOrderPaid_FullMethodName = "/order.OrderService/MarkOrderPaid"
+	OrderService_CancelOrder_FullMethodName   = "/order.OrderService/CancelOrder"
 )
 
 // OrderServiceClient is the client API for OrderService service.
@@ -34,6 +35,8 @@ type OrderServiceClient interface {
 	ListOrders(ctx context.Context, in *ListOrdersRequest, opts ...grpc.CallOption) (*ListOrdersResponse, error)
 	// 标记订单为已支付 (供 Payment Service 调用)
 	MarkOrderPaid(ctx context.Context, in *MarkOrderPaidRequest, opts ...grpc.CallOption) (*MarkOrderPaidResponse, error)
+	// 取消订单
+	CancelOrder(ctx context.Context, in *CancelOrderRequest, opts ...grpc.CallOption) (*CancelOrderResponse, error)
 }
 
 type orderServiceClient struct {
@@ -74,6 +77,16 @@ func (c *orderServiceClient) MarkOrderPaid(ctx context.Context, in *MarkOrderPai
 	return out, nil
 }
 
+func (c *orderServiceClient) CancelOrder(ctx context.Context, in *CancelOrderRequest, opts ...grpc.CallOption) (*CancelOrderResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CancelOrderResponse)
+	err := c.cc.Invoke(ctx, OrderService_CancelOrder_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // OrderServiceServer is the server API for OrderService service.
 // All implementations must embed UnimplementedOrderServiceServer
 // for forward compatibility.
@@ -84,6 +97,8 @@ type OrderServiceServer interface {
 	ListOrders(context.Context, *ListOrdersRequest) (*ListOrdersResponse, error)
 	// 标记订单为已支付 (供 Payment Service 调用)
 	MarkOrderPaid(context.Context, *MarkOrderPaidRequest) (*MarkOrderPaidResponse, error)
+	// 取消订单
+	CancelOrder(context.Context, *CancelOrderRequest) (*CancelOrderResponse, error)
 	mustEmbedUnimplementedOrderServiceServer()
 }
 
@@ -102,6 +117,9 @@ func (UnimplementedOrderServiceServer) ListOrders(context.Context, *ListOrdersRe
 }
 func (UnimplementedOrderServiceServer) MarkOrderPaid(context.Context, *MarkOrderPaidRequest) (*MarkOrderPaidResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method MarkOrderPaid not implemented")
+}
+func (UnimplementedOrderServiceServer) CancelOrder(context.Context, *CancelOrderRequest) (*CancelOrderResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CancelOrder not implemented")
 }
 func (UnimplementedOrderServiceServer) mustEmbedUnimplementedOrderServiceServer() {}
 func (UnimplementedOrderServiceServer) testEmbeddedByValue()                      {}
@@ -178,6 +196,24 @@ func _OrderService_MarkOrderPaid_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _OrderService_CancelOrder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CancelOrderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrderServiceServer).CancelOrder(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: OrderService_CancelOrder_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrderServiceServer).CancelOrder(ctx, req.(*CancelOrderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // OrderService_ServiceDesc is the grpc.ServiceDesc for OrderService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -196,6 +232,10 @@ var OrderService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "MarkOrderPaid",
 			Handler:    _OrderService_MarkOrderPaid_Handler,
+		},
+		{
+			MethodName: "CancelOrder",
+			Handler:    _OrderService_CancelOrder_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

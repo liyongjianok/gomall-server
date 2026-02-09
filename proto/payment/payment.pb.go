@@ -24,7 +24,7 @@ const (
 type PayRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	OrderNo       string                 `protobuf:"bytes,1,opt,name=order_no,json=orderNo,proto3" json:"order_no,omitempty"`
-	Amount        float32                `protobuf:"fixed32,2,opt,name=amount,proto3" json:"amount,omitempty"` // 支付金额
+	Amount        float32                `protobuf:"fixed32,2,opt,name=amount,proto3" json:"amount,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -76,7 +76,7 @@ func (x *PayRequest) GetAmount() float32 {
 type PayResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
-	TransactionId string                 `protobuf:"bytes,2,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"` // 模拟的银行流水号
+	TxId          string                 `protobuf:"bytes,2,opt,name=tx_id,json=txId,proto3" json:"tx_id,omitempty"` // [关键] 对应 Go 里的 TxId
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -118,9 +118,9 @@ func (x *PayResponse) GetSuccess() bool {
 	return false
 }
 
-func (x *PayResponse) GetTransactionId() string {
+func (x *PayResponse) GetTxId() string {
 	if x != nil {
-		return x.TransactionId
+		return x.TxId
 	}
 	return ""
 }
@@ -133,12 +133,12 @@ const file_proto_payment_payment_proto_rawDesc = "" +
 	"\n" +
 	"PayRequest\x12\x19\n" +
 	"\border_no\x18\x01 \x01(\tR\aorderNo\x12\x16\n" +
-	"\x06amount\x18\x02 \x01(\x02R\x06amount\"N\n" +
+	"\x06amount\x18\x02 \x01(\x02R\x06amount\"<\n" +
 	"\vPayResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess\x12%\n" +
-	"\x0etransaction_id\x18\x02 \x01(\tR\rtransactionId2B\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x13\n" +
+	"\x05tx_id\x18\x02 \x01(\tR\x04txId2B\n" +
 	"\x0ePaymentService\x120\n" +
-	"\x03Pay\x12\x13.payment.PayRequest\x1a\x14.payment.PayResponseB$Z\"go-ecommerce/proto/payment;paymentb\x06proto3"
+	"\x03Pay\x12\x13.payment.PayRequest\x1a\x14.payment.PayResponseB\x1cZ\x1ago-ecommerce/proto/paymentb\x06proto3"
 
 var (
 	file_proto_payment_payment_proto_rawDescOnce sync.Once

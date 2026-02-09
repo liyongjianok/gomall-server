@@ -22,18 +22,17 @@ const (
 	ProductService_ListProducts_FullMethodName  = "/product.ProductService/ListProducts"
 	ProductService_GetProduct_FullMethodName    = "/product.ProductService/GetProduct"
 	ProductService_DecreaseStock_FullMethodName = "/product.ProductService/DecreaseStock"
+	ProductService_RollbackStock_FullMethodName = "/product.ProductService/RollbackStock"
 )
 
 // ProductServiceClient is the client API for ProductService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ProductServiceClient interface {
-	// 获取商品列表
 	ListProducts(ctx context.Context, in *ListProductsRequest, opts ...grpc.CallOption) (*ListProductsResponse, error)
-	// 获取商品详情
 	GetProduct(ctx context.Context, in *GetProductRequest, opts ...grpc.CallOption) (*GetProductResponse, error)
-	// 批量扣减库存
 	DecreaseStock(ctx context.Context, in *DecreaseStockRequest, opts ...grpc.CallOption) (*DecreaseStockResponse, error)
+	RollbackStock(ctx context.Context, in *RollbackStockRequest, opts ...grpc.CallOption) (*RollbackStockResponse, error)
 }
 
 type productServiceClient struct {
@@ -74,16 +73,24 @@ func (c *productServiceClient) DecreaseStock(ctx context.Context, in *DecreaseSt
 	return out, nil
 }
 
+func (c *productServiceClient) RollbackStock(ctx context.Context, in *RollbackStockRequest, opts ...grpc.CallOption) (*RollbackStockResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RollbackStockResponse)
+	err := c.cc.Invoke(ctx, ProductService_RollbackStock_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ProductServiceServer is the server API for ProductService service.
 // All implementations must embed UnimplementedProductServiceServer
 // for forward compatibility.
 type ProductServiceServer interface {
-	// 获取商品列表
 	ListProducts(context.Context, *ListProductsRequest) (*ListProductsResponse, error)
-	// 获取商品详情
 	GetProduct(context.Context, *GetProductRequest) (*GetProductResponse, error)
-	// 批量扣减库存
 	DecreaseStock(context.Context, *DecreaseStockRequest) (*DecreaseStockResponse, error)
+	RollbackStock(context.Context, *RollbackStockRequest) (*RollbackStockResponse, error)
 	mustEmbedUnimplementedProductServiceServer()
 }
 
@@ -102,6 +109,9 @@ func (UnimplementedProductServiceServer) GetProduct(context.Context, *GetProduct
 }
 func (UnimplementedProductServiceServer) DecreaseStock(context.Context, *DecreaseStockRequest) (*DecreaseStockResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DecreaseStock not implemented")
+}
+func (UnimplementedProductServiceServer) RollbackStock(context.Context, *RollbackStockRequest) (*RollbackStockResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RollbackStock not implemented")
 }
 func (UnimplementedProductServiceServer) mustEmbedUnimplementedProductServiceServer() {}
 func (UnimplementedProductServiceServer) testEmbeddedByValue()                        {}
@@ -178,6 +188,24 @@ func _ProductService_DecreaseStock_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ProductService_RollbackStock_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RollbackStockRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProductServiceServer).RollbackStock(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProductService_RollbackStock_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProductServiceServer).RollbackStock(ctx, req.(*RollbackStockRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ProductService_ServiceDesc is the grpc.ServiceDesc for ProductService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -196,6 +224,10 @@ var ProductService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DecreaseStock",
 			Handler:    _ProductService_DecreaseStock_Handler,
+		},
+		{
+			MethodName: "RollbackStock",
+			Handler:    _ProductService_RollbackStock_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
