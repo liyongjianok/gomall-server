@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
 	"os"
+	"strconv"
 	"time"
 
 	"go-ecommerce/apps/order/model"
@@ -18,7 +20,7 @@ import (
 	"go-ecommerce/proto/product"
 
 	_ "github.com/mbobakov/grpc-consul-resolver"
-	amqp "github.com/rabbitmq/amqp091-go" // RabbitMQ 客户端
+	amqp "github.com/rabbitmq/amqp091-go"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -29,28 +31,38 @@ import (
 
 // RabbitMQ 配置常量
 const (
-	MQUrl             = "amqp://guest:guest@rabbitmq:5672/"
-	OrderDelayQueue   = "order.delay.queue" // 延迟缓冲队列 (设置消息 TTL)
-	OrderDeadLetterEx = "order.dlx"         // 死信交换机 (DLX)
-	OrderCloseQueue   = "order.close.queue" // 实际消费队列 (监听死信)
-	OrderCloseRouting = "order.close"       // 死信路由 Key
-	OrderTTL          = 60 * 1000           // 订单超时时间 (毫秒)，测试用 60秒
+	MQUrl = "amqp://guest:guest@rabbitmq:5672/"
+
+	// 死信队列配置 (用于订单超时取消)
+	OrderDelayQueue   = "order.delay.queue" // 延迟缓冲队列
+	OrderDeadLetterEx = "order.dlx"         // 死信交换机
+	OrderCloseQueue   = "order.close.queue" // 实际消费队列
+	OrderCloseRouting = "order.close"       // 路由Key
+	OrderTTL          = 60 * 1000           // 超时时间 60秒
+
+	// 秒杀队列配置 (用于削峰填谷)
+	SeckillQueue = "seckill.order.queue"
 )
+
+// 秒杀消息结构体 (必须与 Product Service 发送的格式一致)
+type SeckillMessage struct {
+	UserId int64 `json:"user_id"`
+	SkuId  int64 `json:"sku_id"`
+}
 
 type server struct {
 	order.UnimplementedOrderServiceServer
 	db            *gorm.DB
-	mqConn        *amqp.Connection // RabbitMQ 连接
-	mqCh          *amqp.Channel    // RabbitMQ 通道
+	mqConn        *amqp.Connection
+	mqCh          *amqp.Channel
 	productClient product.ProductServiceClient
 	cartClient    cart.CartServiceClient
 	addressClient address.AddressServiceClient
 }
 
-// initRabbitMQ 初始化 RabbitMQ 死信队列拓扑结构
+// initRabbitMQ 初始化 RabbitMQ 所有队列和交换机
 func (s *server) initRabbitMQ() error {
 	var err error
-	// 1. 建立 RabbitMQ 连接
 	mqUrl := os.Getenv("RABBITMQ_URL")
 	if mqUrl == "" {
 		mqUrl = MQUrl
@@ -64,195 +76,244 @@ func (s *server) initRabbitMQ() error {
 		return fmt.Errorf("打开 Channel 失败: %v", err)
 	}
 
-	// 2. 声明死信交换机 (DLX)
-	// 当消息过期后，会被转发到这个交换机
-	err = s.mqCh.ExchangeDeclare(
-		OrderDeadLetterEx, // 交换机名称
-		"direct",          // 类型
-		true,              // 持久化
-		false,             // 自动删除
-		false,             // 内部使用
-		false,             // 无需等待
-		nil,               // 参数
-	)
+	// -------------------------------------------------------
+	// 1. 声明死信队列结构 (用于超时取消)
+	// -------------------------------------------------------
+
+	// A. 声明死信交换机 (DLX)
+	err = s.mqCh.ExchangeDeclare(OrderDeadLetterEx, "direct", true, false, false, false, nil)
 	if err != nil {
-		return fmt.Errorf("声明死信交换机失败: %v", err)
+		return err
 	}
 
-	// 3. 声明实际消费队列 (OrderCloseQueue)
-	// 这个队列用来接收超时的订单消息，消费者监听这个队列
-	qClose, err := s.mqCh.QueueDeclare(
-		OrderCloseQueue, // 队列名称
-		true,            // 持久化
-		false,           // 未使用时删除
-		false,           // 独占
-		false,           // 无需等待
-		nil,             // 参数
-	)
+	// B. 声明实际消费队列 (OrderCloseQueue)
+	qClose, err := s.mqCh.QueueDeclare(OrderCloseQueue, true, false, false, false, nil)
 	if err != nil {
-		return fmt.Errorf("声明消费队列失败: %v", err)
+		return err
 	}
 
-	// 4. 将消费队列绑定到死信交换机
-	err = s.mqCh.QueueBind(
-		qClose.Name,       // 队列名称
-		OrderCloseRouting, // 路由 Key
-		OrderDeadLetterEx, // 交换机
-		false,
-		nil,
-	)
+	// C. 绑定消费队列到 DLX
+	err = s.mqCh.QueueBind(qClose.Name, OrderCloseRouting, OrderDeadLetterEx, false, nil)
 	if err != nil {
-		return fmt.Errorf("绑定消费队列失败: %v", err)
+		return err
 	}
 
-	// 5. 声明缓冲队列 (Delay Queue) - 设置 TTL 和 DLX
-	// 这是一个“死胡同”队列，没有消费者监听它。
-	// 消息在这里待满 TTL 时间后，变成死信，被转发到 DLX。
+	// D. 声明延迟队列 (设置 TTL 和 DLX)
 	args := amqp.Table{
-		"x-dead-letter-exchange":    OrderDeadLetterEx, // 过期后发送到哪个交换机
-		"x-dead-letter-routing-key": OrderCloseRouting, // 过期后携带的路由 Key
-		"x-message-ttl":             OrderTTL,          // 消息存活时间 (毫秒)
+		"x-dead-letter-exchange":    OrderDeadLetterEx,
+		"x-dead-letter-routing-key": OrderCloseRouting,
+		"x-message-ttl":             OrderTTL,
 	}
-	_, err = s.mqCh.QueueDeclare(
-		OrderDelayQueue, // 队列名称
-		true,            // 持久化
-		false,           // 未使用时删除
-		false,           // 独占
-		false,           // 无需等待
-		args,            // [关键] 设置死信参数
-	)
+	_, err = s.mqCh.QueueDeclare(OrderDelayQueue, true, false, false, false, args)
 	if err != nil {
-		return fmt.Errorf("声明延迟队列失败: %v", err)
+		return err
 	}
 
-	log.Println("RabbitMQ 初始化成功 (死信队列模式)")
+	// -------------------------------------------------------
+	// 2. 声明秒杀队列 (用于异步下单)
+	// -------------------------------------------------------
+	_, err = s.mqCh.QueueDeclare(
+		SeckillQueue, // name
+		true,         // durable
+		false,        // delete when unused
+		false,        // exclusive
+		false,        // no-wait
+		nil,          // args
+	)
+	if err != nil {
+		return fmt.Errorf("声明秒杀队列失败: %v", err)
+	}
+
+	log.Println("RabbitMQ 初始化成功 (包含 DLX 和 秒杀队列)")
 	return nil
 }
 
-// publishDelayMessage 发送延迟消息到缓冲队列
+// publishDelayMessage 发送延迟消息 (用于超时控制)
 func (s *server) publishDelayMessage(orderNo string) error {
-	// 发送到 Delay Queue。不需要指定路由逻辑，因为它完全依赖 TTL 过期机制。
 	return s.mqCh.PublishWithContext(context.Background(),
-		"",              // 默认交换机
-		OrderDelayQueue, // 路由到缓冲队列
-		false,           // mandatory
-		false,           // immediate
+		"",              // exchange
+		OrderDelayQueue, // routing key
+		false,
+		false,
 		amqp.Publishing{
 			ContentType:  "text/plain",
 			Body:         []byte(orderNo),
-			DeliveryMode: amqp.Persistent, // 消息持久化
+			DeliveryMode: amqp.Persistent,
 		})
 }
 
-// startConsumer 启动消费者监听超时订单
+// startConsumer 启动消费者协程
 func (s *server) startConsumer() {
-	msgs, err := s.mqCh.Consume(
-		OrderCloseQueue, // 监听的是死信转发后的队列
-		"",              // 消费者名称
-		false,           // 关闭自动 ACK (手动确认更安全)
-		false,           // 独占
-		false,           // no-local
-		false,           // no-wait
-		nil,             // args
-	)
+	// -------------------------------------------------------
+	// 消费者 1: 监听超时订单 (OrderCloseQueue)
+	// -------------------------------------------------------
+	msgsClose, err := s.mqCh.Consume(OrderCloseQueue, "", false, false, false, false, nil)
 	if err != nil {
-		log.Fatalf("注册消费者失败: %v", err)
+		log.Fatalf("无法监听关闭队列: %v", err)
 	}
 
-	log.Println("正在监听订单超时队列 (OrderCloseQueue)...")
-
 	go func() {
-		for d := range msgs {
+		for d := range msgsClose {
 			orderNo := string(d.Body)
-			log.Printf("[MQ] 收到超时订单: %s", orderNo)
+			log.Printf("[MQ] 收到超时订单需处理: %s", orderNo)
 
-			// 调用取消订单的核心逻辑
-			// 创建一个新的 Context，并设置超时，防止处理卡死
+			// 执行取消逻辑
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			_, err := s.cancelOrderLogic(ctx, orderNo)
 			cancel()
 
 			if err != nil {
-				log.Printf("[MQ] 自动取消订单 %s 失败: %v", orderNo, err)
-				// 如果是严重错误(如DB挂了)，可以用 d.Reject(true) 重试
-				// 这里为了演示简单，如果订单已取消或不存在，我们直接 ACK 确认掉，防止消息堆积
+				log.Printf("[MQ] 自动取消失败: %v", err)
+				// 生产环境可以考虑 d.Reject(true) 重试
 				d.Ack(false)
 			} else {
-				// 处理成功，发送 ACK 确认消息已被消费
 				d.Ack(false)
-				log.Printf("[MQ] 订单 %s 已自动取消并确认", orderNo)
+				log.Printf("[MQ] 订单 %s 已自动取消", orderNo)
 			}
+		}
+	}()
+
+	// -------------------------------------------------------
+	// 消费者 2: 监听秒杀成功消息 (SeckillQueue) -> 异步创建订单
+	// -------------------------------------------------------
+	msgsSeckill, err := s.mqCh.Consume(SeckillQueue, "", false, false, false, false, nil)
+	if err != nil {
+		log.Fatalf("无法监听秒杀队列: %v", err)
+	}
+
+	go func() {
+		for d := range msgsSeckill {
+			var msg SeckillMessage
+			if err := json.Unmarshal(d.Body, &msg); err != nil {
+				log.Printf("[MQ] 秒杀消息解析失败: %v", err)
+				d.Ack(false) // 格式错误，丢弃
+				continue
+			}
+
+			log.Printf("[MQ] 开始处理秒杀订单: User=%d SKU=%d", msg.UserId, msg.SkuId)
+
+			// 执行创建订单逻辑
+			err := s.createSeckillOrder(msg.UserId, msg.SkuId)
+			if err != nil {
+				log.Printf("[MQ] 秒杀下单失败: %v", err)
+				// 生产环境应该写入一张 "秒杀失败记录表"，后续人工处理或退库存
+			} else {
+				log.Printf("[MQ] 秒杀下单成功: User=%d SKU=%d", msg.UserId, msg.SkuId)
+			}
+			d.Ack(false)
 		}
 	}()
 }
 
-// CreateOrder 创建订单
-func (s *server) CreateOrder(ctx context.Context, req *order.CreateOrderRequest) (*order.CreateOrderResponse, error) {
-	// 0. 校验地址信息
-	if req.AddressId <= 0 {
-		return nil, status.Error(codes.InvalidArgument, "必须填写收货地址 ID")
+func (s *server) createSeckillOrder(userId, skuId int64) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var receiverName, receiverMobile, fullAddr string
+
+	// 1. 获取用户地址
+	addrResp, err := s.addressClient.ListAddress(ctx, &address.ListAddressRequest{UserId: userId})
+
+	// [修改核心] 增加兜底逻辑：如果是压测用户(没地址)，使用默认信息，而不是报错
+	if err != nil || len(addrResp.Addresses) == 0 {
+		log.Printf("[Info] 用户 %d 无收货地址，使用默认测试地址生成订单", userId)
+		receiverName = fmt.Sprintf("测试用户%d", userId)
+		receiverMobile = "13800008888"
+		fullAddr = "山东省潍坊市寿光市蔬菜高科技示范园(自动生成)"
+	} else {
+		// 正常用户，取第一个地址
+		addr := addrResp.Addresses[0]
+		receiverName = addr.Name
+		receiverMobile = addr.Mobile
+		fullAddr = fmt.Sprintf("%s%s%s%s", addr.Province, addr.City, addr.District, addr.DetailAddress)
 	}
-	addrResp, err := s.addressClient.GetAddress(ctx, &address.GetAddressRequest{AddressId: req.AddressId})
+
+	// 2. 获取商品信息
+	prodResp, err := s.productClient.GetProduct(ctx, &product.GetProductRequest{Id: skuId})
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "地址查询失败: %v", err)
-	}
-	if addrResp.Address.UserId != req.UserId {
-		return nil, status.Error(codes.PermissionDenied, "地址不属于该用户")
-	}
-	// 拼接详细地址字符串
-	fullAddress := fmt.Sprintf("%s%s%s%s", addrResp.Address.Province, addrResp.Address.City, addrResp.Address.District, addrResp.Address.DetailAddress)
-
-	// 1. 获取购物车商品
-	cartResp, err := s.cartClient.GetCart(ctx, &cart.GetCartRequest{UserId: req.UserId})
-	if err != nil || len(cartResp.Items) == 0 {
-		return nil, status.Error(codes.Unknown, "购物车为空")
+		return fmt.Errorf("查询商品失败: %v", err)
 	}
 
-	// 2. 开启数据库事务
-	tx := s.db.Begin()
-	var totalAmount float32
-	var orderItems []model.OrderItem
+	// 3. 写入 MySQL
+	orderNo := fmt.Sprintf("SK%d%d", time.Now().UnixNano(), userId)
 
-	// 3. 遍历购物车 & 扣减库存
-	for _, item := range cartResp.Items {
-		// 查询商品详情 (获取价格和名称)
-		prodResp, err := s.productClient.GetProduct(ctx, &product.GetProductRequest{Id: item.SkuId})
-		if err != nil {
-			tx.Rollback()
-			return nil, status.Errorf(codes.NotFound, "商品不存在: SKU %d", item.SkuId)
-		}
-
-		// 远程调用扣减库存
-		_, err = s.productClient.DecreaseStock(ctx, &product.DecreaseStockRequest{SkuId: item.SkuId, Count: item.Quantity})
-		if err != nil {
-			tx.Rollback()
-			return nil, status.Errorf(codes.Unknown, "扣减库存失败: %v", err)
-		}
-
-		totalAmount += prodResp.Price * float32(item.Quantity)
-		orderItems = append(orderItems, model.OrderItem{
+	newOrder := model.Order{
+		OrderNo:         orderNo,
+		UserID:          userId,
+		TotalAmount:     float64(prodResp.Price),
+		Status:          0, // 待支付
+		ReceiverName:    receiverName,
+		ReceiverMobile:  receiverMobile,
+		ReceiverAddress: fullAddr,
+		Items: []model.OrderItem{{
 			ProductID:   prodResp.Id,
 			SkuID:       prodResp.SkuId,
 			ProductName: prodResp.Name,
 			SkuName:     prodResp.SkuName,
 			Price:       float64(prodResp.Price),
-			Quantity:    int(item.Quantity),
+			Quantity:    1,
 			Picture:     prodResp.Picture,
+		}},
+	}
+
+	if err := s.db.Create(&newOrder).Error; err != nil {
+		return fmt.Errorf("写入数据库失败: %v", err)
+	}
+
+	// 4. 发送超时取消消息
+	_ = s.publishDelayMessage(orderNo)
+
+	return nil
+}
+
+// CreateOrder 普通下单逻辑 (RPC)
+func (s *server) CreateOrder(ctx context.Context, req *order.CreateOrderRequest) (*order.CreateOrderResponse, error) {
+	// 0. 校验地址
+	if req.AddressId <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "必须选择收货地址")
+	}
+	addrResp, err := s.addressClient.GetAddress(ctx, &address.GetAddressRequest{AddressId: req.AddressId})
+	if err != nil {
+		return nil, status.Errorf(codes.NotFound, "地址不存在")
+	}
+	fullAddress := fmt.Sprintf("%s%s%s%s", addrResp.Address.Province, addrResp.Address.City, addrResp.Address.District, addrResp.Address.DetailAddress)
+
+	// 1. 获取购物车
+	cartResp, err := s.cartClient.GetCart(ctx, &cart.GetCartRequest{UserId: req.UserId})
+	if err != nil || len(cartResp.Items) == 0 {
+		return nil, status.Error(codes.Unknown, "购物车为空")
+	}
+
+	tx := s.db.Begin()
+	var totalAmount float32
+	var orderItems []model.OrderItem
+
+	// 2. 扣库存 & 算钱
+	for _, item := range cartResp.Items {
+		prodResp, err := s.productClient.GetProduct(ctx, &product.GetProductRequest{Id: item.SkuId})
+		if err != nil {
+			tx.Rollback()
+			return nil, status.Errorf(codes.NotFound, "商品 SKU %d 不存在", item.SkuId)
+		}
+
+		_, err = s.productClient.DecreaseStock(ctx, &product.DecreaseStockRequest{SkuId: item.SkuId, Count: item.Quantity})
+		if err != nil {
+			tx.Rollback()
+			return nil, status.Errorf(codes.ResourceExhausted, "库存不足")
+		}
+
+		totalAmount += prodResp.Price * float32(item.Quantity)
+		orderItems = append(orderItems, model.OrderItem{
+			ProductID: prodResp.Id, SkuID: prodResp.SkuId, ProductName: prodResp.Name, SkuName: prodResp.SkuName,
+			Price: float64(prodResp.Price), Quantity: int(item.Quantity), Picture: prodResp.Picture,
 		})
 	}
 
-	// 4. 创建订单记录
-	// 生成唯一的订单号 (简单模拟：时间戳+用户ID)
+	// 3. 创建订单
 	orderNo := fmt.Sprintf("%d%d", time.Now().UnixNano(), req.UserId)
 	newOrder := model.Order{
-		OrderNo:         orderNo,
-		UserID:          req.UserId,
-		TotalAmount:     float64(totalAmount),
-		Status:          0, // 0: 待支付
-		Items:           orderItems,
-		ReceiverName:    addrResp.Address.Name,
-		ReceiverMobile:  addrResp.Address.Mobile,
-		ReceiverAddress: fullAddress,
+		OrderNo: orderNo, UserID: req.UserId, TotalAmount: float64(totalAmount), Status: 0,
+		Items: orderItems, ReceiverName: addrResp.Address.Name, ReceiverMobile: addrResp.Address.Mobile, ReceiverAddress: fullAddress,
 	}
 
 	if err := tx.Create(&newOrder).Error; err != nil {
@@ -261,54 +322,35 @@ func (s *server) CreateOrder(ctx context.Context, req *order.CreateOrderRequest)
 	}
 	tx.Commit()
 
-	// 5. 清空购物车
-	_, _ = s.cartClient.EmptyCart(ctx, &cart.EmptyCartRequest{UserId: req.UserId})
-
-	// 6. [新增] 发送 RabbitMQ 延迟消息
-	err = s.publishDelayMessage(orderNo)
-	if err != nil {
-		// 生产环境这里需要降级处理 (例如写入本地重试表)，防止消息丢失
-		log.Printf("[Error] 订单 %s 发送延迟消息失败: %v", orderNo, err)
-	} else {
-		log.Printf("订单 %s 已发送至延迟队列 (TTL: %dms)", orderNo, OrderTTL)
-	}
+	// 4. 清空购物车 & 发送延迟消息
+	s.cartClient.EmptyCart(ctx, &cart.EmptyCartRequest{UserId: req.UserId})
+	s.publishDelayMessage(orderNo)
 
 	return &order.CreateOrderResponse{OrderNo: orderNo, TotalAmount: totalAmount}, nil
 }
 
-// ListOrders 查询订单列表
+// ListOrders 查询订单列表 (RPC)
 func (s *server) ListOrders(ctx context.Context, req *order.ListOrdersRequest) (*order.ListOrdersResponse, error) {
 	var orders []model.Order
 	if err := s.db.Preload("Items").Where("user_id = ?", req.UserId).Order("created_at desc").Find(&orders).Error; err != nil {
-		return nil, status.Error(codes.Internal, "查询数据库失败")
+		return nil, status.Error(codes.Internal, "查询失败")
 	}
 	var respOrders []*order.OrderInfo
 	for _, o := range orders {
 		var items []*order.OrderItem
 		for _, item := range o.Items {
 			items = append(items, &order.OrderItem{
-				ProductName: item.ProductName,
-				SkuName:     item.SkuName,
-				Price:       float32(item.Price),
-				Quantity:    int32(item.Quantity),
-				Picture:     item.Picture,
+				ProductName: item.ProductName, SkuName: item.SkuName, Price: float32(item.Price), Quantity: int32(item.Quantity), Picture: item.Picture,
 			})
 		}
 		respOrders = append(respOrders, &order.OrderInfo{
-			OrderNo:         o.OrderNo,
-			TotalAmount:     float32(o.TotalAmount),
-			Status:          int32(o.Status),
-			CreatedAt:       o.CreatedAt.Format("2006-01-02 15:04:05"),
-			Items:           items,
-			ReceiverName:    o.ReceiverName,
-			ReceiverMobile:  o.ReceiverMobile,
-			ReceiverAddress: o.ReceiverAddress,
+			OrderNo: o.OrderNo, TotalAmount: float32(o.TotalAmount), Status: int32(o.Status), CreatedAt: o.CreatedAt.Format("2006-01-02 15:04:05"), Items: items, ReceiverName: o.ReceiverName, ReceiverMobile: o.ReceiverMobile, ReceiverAddress: o.ReceiverAddress,
 		})
 	}
 	return &order.ListOrdersResponse{Orders: respOrders}, nil
 }
 
-// MarkOrderPaid 支付成功回调
+// MarkOrderPaid 标记支付成功 (RPC)
 func (s *server) MarkOrderPaid(ctx context.Context, req *order.MarkOrderPaidRequest) (*order.MarkOrderPaidResponse, error) {
 	var o model.Order
 	if err := s.db.Where("order_no = ?", req.OrderNo).First(&o).Error; err != nil {
@@ -317,77 +359,82 @@ func (s *server) MarkOrderPaid(ctx context.Context, req *order.MarkOrderPaidRequ
 	if o.Status == 1 {
 		return &order.MarkOrderPaidResponse{Success: true}, nil
 	}
-
 	if err := s.db.Model(&o).UpdateColumn("status", 1).Error; err != nil {
-		return nil, status.Error(codes.Internal, "更新订单状态失败")
+		return nil, status.Error(codes.Internal, "更新状态失败")
 	}
-
-	log.Printf("订单 %s 已标记为支付成功", req.OrderNo)
-	// 注意：使用死信队列模式，支付成功后不需要手动移除消息。
-	// 消息过期后被消费者收到时，cancelOrderLogic 会检查订单状态，如果是已支付，则忽略取消操作。
+	log.Printf("订单 %s 支付成功", req.OrderNo)
 	return &order.MarkOrderPaidResponse{Success: true}, nil
 }
 
-// CancelOrder 取消订单 (RPC 接口)
+// CancelOrder 取消订单 (RPC)
 func (s *server) CancelOrder(ctx context.Context, req *order.CancelOrderRequest) (*order.CancelOrderResponse, error) {
 	return s.cancelOrderLogic(ctx, req.OrderNo)
 }
 
-// cancelOrderLogic 取消订单核心逻辑 (供 RPC 和 MQ 消费者复用)
+// cancelOrderLogic 取消逻辑核心 (RPC/MQ 共用)
 func (s *server) cancelOrderLogic(ctx context.Context, orderNo string) (*order.CancelOrderResponse, error) {
 	var o model.Order
-	// 注意：这里需要 Preload Items 以便回滚库存
 	if err := s.db.Preload("Items").Where("order_no = ?", orderNo).First(&o).Error; err != nil {
 		return nil, status.Errorf(codes.NotFound, "订单不存在")
 	}
 
-	// 关键：检查订单状态
-	// 如果已经支付(1)或已取消(2)，则什么都不做
+	// 状态检查：如果已支付(1)或已取消(2)，跳过
 	if o.Status != 0 {
-		log.Printf("订单 %s 状态为 %d，跳过取消操作", orderNo, o.Status)
+		log.Printf("订单 %s 状态为 %d，跳过取消", orderNo, o.Status)
 		return &order.CancelOrderResponse{Success: true}, nil
 	}
 
-	// 开启事务进行取消
+	// 更新状态为已取消(2)
 	if err := s.db.Model(&o).UpdateColumn("status", 2).Error; err != nil {
-		return nil, status.Error(codes.Internal, "更新订单状态失败")
+		return nil, status.Error(codes.Internal, "更新状态失败")
 	}
 
 	// 回滚库存
 	for _, item := range o.Items {
 		_, err := s.productClient.RollbackStock(ctx, &product.RollbackStockRequest{SkuId: int64(item.SkuID), Count: int32(item.Quantity)})
 		if err != nil {
-			log.Printf("[Error] 回滚库存失败: %v", err)
+			log.Printf("[严重错误] 订单 %s 回滚库存失败: %v", orderNo, err)
 		}
 	}
 
-	log.Printf("订单 %s 已取消 (触发源: RabbitMQ/RPC)", orderNo)
+	log.Printf("订单 %s 已成功取消", orderNo)
 	return &order.CancelOrderResponse{Success: true}, nil
 }
 
 func main() {
-	// 加载配置
 	c, err := config.LoadConfig(".")
 	if err != nil {
 		log.Fatalf("加载配置失败: %v", err)
 	}
 
-	// [关键] 适配 Docker 环境变量
+	// Docker 环境变量
 	if v := os.Getenv("MYSQL_HOST"); v != "" {
 		c.Mysql.Host = v
 	}
+	if v := os.Getenv("MYSQL_PORT"); v != "" {
+		if p, err := strconv.Atoi(v); err == nil {
+			c.Mysql.Port = p
+		}
+	}
+	if v := os.Getenv("CONSUL_ADDRESS"); v != "" {
+		c.Consul.Address = v
+	}
 
-	// 初始化数据库
+	// 初始化 DB
 	db, err := database.InitMySQL(c.Mysql)
 	if err != nil {
 		log.Fatalf("初始化 MySQL 失败: %v", err)
 	}
 	db.AutoMigrate(&model.Order{}, &model.OrderItem{})
 
-	// 建立 gRPC 连接 (Product, Cart, Address)
-	prodConn, _ := grpc.Dial(fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "product-service"), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy": "round_robin"}`))
-	cartConn, _ := grpc.Dial(fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "cart-service"), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy": "round_robin"}`))
-	addrConn, _ := grpc.Dial(fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "address-service"), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy": "round_robin"}`))
+	// gRPC 客户端连接
+	opts := []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy": "round_robin"}`),
+	}
+	prodConn, _ := grpc.Dial(fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "product-service"), opts...)
+	cartConn, _ := grpc.Dial(fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "cart-service"), opts...)
+	addrConn, _ := grpc.Dial(fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "address-service"), opts...)
 
 	s := grpc.NewServer()
 	srv := &server{
@@ -397,33 +444,28 @@ func main() {
 		addressClient: address.NewAddressServiceClient(addrConn),
 	}
 
-	// [新增] 初始化 RabbitMQ 并启动消费者
-	// 给予一定的重试机制，防止 Order Service 启动比 RabbitMQ 快导致连接失败
+	// 初始化 RabbitMQ (重试机制)
 	for i := 0; i < 10; i++ {
 		if err := srv.initRabbitMQ(); err != nil {
-			log.Printf("等待 RabbitMQ 就绪... (%v)", err)
+			log.Printf("等待 RabbitMQ... %v", err)
 			time.Sleep(2 * time.Second)
 		} else {
 			break
 		}
 	}
-
 	if srv.mqConn != nil {
 		defer srv.mqConn.Close()
 		defer srv.mqCh.Close()
-		// 启动后台消费协程
-		srv.startConsumer()
+		srv.startConsumer() // 启动消费者
 	} else {
-		log.Println("[警告] RabbitMQ 初始化失败，自动取消订单功能将不可用！")
+		log.Println("[警告] RabbitMQ 未连接，自动取消和秒杀下单功能将失效！")
 	}
 
-	// 注册 gRPC 服务
 	order.RegisterOrderServiceServer(s, srv)
 	reflection.Register(s)
 
-	// 启动监听
 	lis, _ := net.Listen("tcp", fmt.Sprintf(":%d", c.Service.Port))
 	discovery.RegisterService(c.Service.Name, c.Service.Port, c.Consul.Address)
-	log.Printf("Order Service 正在监听端口 :%d", c.Service.Port)
+	log.Printf("Order Service listening on :%d", c.Service.Port)
 	s.Serve(lis)
 }
