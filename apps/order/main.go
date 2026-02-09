@@ -14,6 +14,7 @@ import (
 	"go-ecommerce/pkg/config"
 	"go-ecommerce/pkg/database"
 	"go-ecommerce/pkg/discovery"
+	"go-ecommerce/pkg/tracer"
 	"go-ecommerce/proto/address"
 	"go-ecommerce/proto/cart"
 	"go-ecommerce/proto/order"
@@ -21,6 +22,7 @@ import (
 
 	_ "github.com/mbobakov/grpc-consul-resolver"
 	amqp "github.com/rabbitmq/amqp091-go"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -402,6 +404,16 @@ func (s *server) cancelOrderLogic(ctx context.Context, orderNo string) (*order.C
 }
 
 func main() {
+	jaegerAddr := "jaeger:4318"
+	if os.Getenv("JAEGER_HOST") != "" {
+		jaegerAddr = os.Getenv("JAEGER_HOST")
+	}
+	tp, err := tracer.InitTracer("order-service", jaegerAddr)
+	if err != nil {
+		log.Printf("Init tracer failed: %v", err)
+	}
+	defer func() { _ = tp.Shutdown(context.Background()) }()
+
 	c, err := config.LoadConfig(".")
 	if err != nil {
 		log.Fatalf("加载配置失败: %v", err)
@@ -436,7 +448,9 @@ func main() {
 	cartConn, _ := grpc.Dial(fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "cart-service"), opts...)
 	addrConn, _ := grpc.Dial(fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "address-service"), opts...)
 
-	s := grpc.NewServer()
+	s := grpc.NewServer(
+		grpc.UnaryInterceptor(otelgrpc.UnaryServerInterceptor()), // [关键] 接收 Trace
+	)
 	srv := &server{
 		db:            db,
 		productClient: product.NewProductServiceClient(prodConn),
