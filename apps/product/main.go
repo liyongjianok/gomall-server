@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -15,6 +16,7 @@ import (
 	"go-ecommerce/pkg/discovery"
 	"go-ecommerce/proto/product"
 
+	"github.com/olivere/elastic/v7"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/reflection"
@@ -22,16 +24,20 @@ import (
 	"gorm.io/gorm"
 )
 
-// 定义数据库模型
+// ES 索引名称
+const ProductIndex = "products"
+
+// Product 数据库模型
 type Product struct {
-	ID          int64   `gorm:"primaryKey"`
-	Name        string  `gorm:"type:varchar(100)"`
-	Description string  `gorm:"type:text"`
-	CategoryID  int64   `gorm:"index"`
-	Picture     string  `gorm:"type:varchar(255)"`
-	Price       float64 `gorm:"type:decimal(10,2)"`
+	ID          int64   `gorm:"primaryKey" json:"id"`
+	Name        string  `gorm:"type:varchar(100)" json:"name"`
+	Description string  `gorm:"type:text" json:"description"`
+	CategoryID  int64   `gorm:"index" json:"category_id"`
+	Picture     string  `gorm:"type:varchar(255)" json:"picture"`
+	Price       float64 `gorm:"type:decimal(10,2)" json:"price"`
 }
 
+// Sku 数据库模型
 type Sku struct {
 	ID        int64   `gorm:"primaryKey"`
 	ProductID int64   `gorm:"index"`
@@ -43,10 +49,42 @@ type Sku struct {
 
 type server struct {
 	product.UnimplementedProductServiceServer
-	db *gorm.DB
+	db    *gorm.DB
+	esCli *elastic.Client
+}
+
+// syncProductsToES 将 MySQL 数据同步到 ES
+func (s *server) syncProductsToES() {
+	log.Println("[ES] 开始全量同步商品数据...")
+	var products []Product
+	if err := s.db.Find(&products).Error; err != nil {
+		log.Printf("[ES] 读取数据库失败: %v", err)
+		return
+	}
+
+	for _, p := range products {
+		_, err := s.esCli.Index().
+			Index(ProductIndex).
+			Id(fmt.Sprintf("%d", p.ID)).
+			BodyJson(p).
+			Do(context.Background())
+		if err != nil {
+			log.Printf("[ES] 同步商品 %d 失败: %v", p.ID, err)
+		}
+	}
+	log.Printf("[ES] 同步完成，共 %d 条商品", len(products))
 }
 
 func (s *server) ListProducts(ctx context.Context, req *product.ListProductsRequest) (*product.ListProductsResponse, error) {
+	// 如果有搜索词，走 ES
+	if req.Query != "" {
+		return s.searchFromES(ctx, req)
+	}
+	// 否则走 MySQL
+	return s.listFromMySQL(ctx, req)
+}
+
+func (s *server) listFromMySQL(ctx context.Context, req *product.ListProductsRequest) (*product.ListProductsResponse, error) {
 	var products []Product
 	var total int64
 
@@ -71,10 +109,50 @@ func (s *server) ListProducts(ctx context.Context, req *product.ListProductsRequ
 			Picture:     p.Picture,
 			Price:       float32(p.Price),
 			CategoryId:  p.CategoryID,
+			SkuName:     "",
+			SkuId:       0,
 		})
 	}
 
 	return &product.ListProductsResponse{Products: pbProducts, Total: total}, nil
+}
+
+func (s *server) searchFromES(ctx context.Context, req *product.ListProductsRequest) (*product.ListProductsResponse, error) {
+	q := elastic.NewMultiMatchQuery(req.Query, "name", "description")
+	offset := (req.Page - 1) * req.PageSize
+
+	searchResult, err := s.esCli.Search().
+		Index(ProductIndex).
+		Query(q).
+		From(int(offset)).Size(int(req.PageSize)).
+		Do(ctx)
+
+	if err != nil {
+		log.Printf("ES Search Error: %v", err)
+		return nil, status.Error(codes.Internal, "Search engine error")
+	}
+
+	var pbProducts []*product.Product
+	for _, hit := range searchResult.Hits.Hits {
+		var p Product
+		if err := json.Unmarshal(hit.Source, &p); err == nil {
+			pbProducts = append(pbProducts, &product.Product{
+				Id:          p.ID,
+				Name:        p.Name,
+				Description: p.Description,
+				Picture:     p.Picture,
+				Price:       float32(p.Price),
+				CategoryId:  p.CategoryID,
+				SkuName:     "",
+				SkuId:       0,
+			})
+		}
+	}
+
+	return &product.ListProductsResponse{
+		Products: pbProducts,
+		Total:    searchResult.TotalHits(),
+	}, nil
 }
 
 func (s *server) GetProduct(ctx context.Context, req *product.GetProductRequest) (*product.GetProductResponse, error) {
@@ -82,12 +160,10 @@ func (s *server) GetProduct(ctx context.Context, req *product.GetProductRequest)
 	if err := s.db.First(&sku, req.Id).Error; err != nil {
 		return nil, status.Errorf(codes.NotFound, "Sku not found: %d", req.Id)
 	}
-
 	var p Product
 	if err := s.db.First(&p, sku.ProductID).Error; err != nil {
 		return nil, status.Errorf(codes.NotFound, "Product not found: %d", sku.ProductID)
 	}
-
 	return &product.GetProductResponse{
 		Id:          p.ID,
 		Name:        p.Name,
@@ -142,10 +218,8 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	// [修正] 统一使用分拆配置
 	if v := os.Getenv("MYSQL_HOST"); v != "" {
 		c.Mysql.Host = v
-		log.Printf("Config Override: MYSQL_HOST used (%s)", v)
 	}
 	if v := os.Getenv("MYSQL_PORT"); v != "" {
 		if p, err := strconv.Atoi(v); err == nil {
@@ -159,10 +233,15 @@ func main() {
 		c.Mysql.Password = v
 	}
 	if v := os.Getenv("MYSQL_DBNAME"); v != "" {
-		c.Mysql.DbName = v // 注意大小写
+		c.Mysql.DbName = v
 	}
 	if v := os.Getenv("CONSUL_ADDRESS"); v != "" {
 		c.Consul.Address = v
+	}
+
+	esAddr := "http://127.0.0.1:9200"
+	if v := os.Getenv("ES_ADDRESS"); v != "" {
+		esAddr = v
 	}
 
 	db, err := database.InitMySQL(c.Mysql)
@@ -170,6 +249,17 @@ func main() {
 		log.Fatalf("Failed to init mysql: %v", err)
 	}
 	db.AutoMigrate(&Product{}, &Sku{})
+
+	// 此时本地 go.mod 必须已经包含 olivere/elastic/v7
+	esCli, err := elastic.NewClient(
+		elastic.SetURL(esAddr),
+		elastic.SetSniff(false),
+	)
+	if err != nil {
+		log.Printf("Warning: Failed to connect to ES: %v", err)
+	} else {
+		log.Println("Elasticsearch connected successfully")
+	}
 
 	addr := fmt.Sprintf(":%d", c.Service.Port)
 	lis, err := net.Listen("tcp", addr)
@@ -183,11 +273,15 @@ func main() {
 	}
 
 	s := grpc.NewServer()
-	product.RegisterProductServiceServer(s, &server{db: db})
+	srv := &server{db: db, esCli: esCli}
+	product.RegisterProductServiceServer(s, srv)
 	reflection.Register(s)
 
-	log.Printf("Product Service listening on %s", addr)
+	if esCli != nil {
+		go srv.syncProductsToES()
+	}
 
+	log.Printf("Product Service listening on %s", addr)
 	go func() {
 		if err := s.Serve(lis); err != nil {
 			log.Fatalf("failed to serve: %v", err)

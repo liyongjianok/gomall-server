@@ -15,6 +15,7 @@ message ListProductsRequest {
   int32 page = 1;
   int32 page_size = 2;
   int64 category_id = 3;
+  string query = 4; // 搜索关键词
 }
 
 message ListProductsResponse {
@@ -22,7 +23,7 @@ message ListProductsResponse {
   int64 total = 2;
 }
 
-// 定义 Product 消息
+// 定义 Product 消息 (完全保留你的定义)
 message Product {
   int64 id = 1;
   string name = 2;
@@ -35,10 +36,9 @@ message Product {
 }
 
 message GetProductRequest {
-  int64 id = 1; // 这里其实是 sku_id
+  int64 id = 1;
 }
 
-// 保持扁平结构，方便 Order 服务直接调用
 message GetProductResponse {
   int64 id = 1;
   string name = 2;
@@ -50,8 +50,6 @@ message GetProductResponse {
   int64 sku_id = 8;
 }
 
-// 修正：支持批量扣减（如果你想做批量），或者单体扣减。
-// 为了配合 Order 代码，我们这里保持单体扣减，修复 undefined Requests 报错
 message DecreaseStockRequest {
   int64 sku_id = 1;
   int32 count = 2;

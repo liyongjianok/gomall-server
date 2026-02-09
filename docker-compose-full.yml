@@ -37,6 +37,29 @@ services:
       - RABBITMQ_DEFAULT_PASS=guest
     restart: always
 
+  elasticsearch:
+    image: elasticsearch:7.17.13
+    container_name: deploy-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m" # 限制内存使用
+    ports:
+      - "9200:9200"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    restart: always
+
+  kibana:
+    image: kibana:7.17.13
+    container_name: deploy-kibana
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    depends_on:
+      - elasticsearch
+    restart: always
+
   # ==================== 微服务 ====================
   user-service:
     build:
@@ -66,6 +89,7 @@ services:
     depends_on:
       - consul
       - mysql
+      - elasticsearch
     ports:
       - "50052:50052"
     environment:
@@ -73,6 +97,7 @@ services:
       - SERVICE_PORT=50052
       - CONSUL_ADDRESS=consul:8500
       - MYSQL_DSN=root:root@tcp(mysql:3306)/db_product?charset=utf8mb4&parseTime=True&loc=Local
+      - ES_ADDRESS=http://elasticsearch:9200
 
   cart-service:
     build:
@@ -180,3 +205,4 @@ services:
 
 volumes:
   mysql_data:
+  es_data:

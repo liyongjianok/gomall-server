@@ -26,6 +26,7 @@ type ListProductsRequest struct {
 	Page          int32                  `protobuf:"varint,1,opt,name=page,proto3" json:"page,omitempty"`
 	PageSize      int32                  `protobuf:"varint,2,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
 	CategoryId    int64                  `protobuf:"varint,3,opt,name=category_id,json=categoryId,proto3" json:"category_id,omitempty"`
+	Query         string                 `protobuf:"bytes,4,opt,name=query,proto3" json:"query,omitempty"` // 搜索关键词
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -81,6 +82,13 @@ func (x *ListProductsRequest) GetCategoryId() int64 {
 	return 0
 }
 
+func (x *ListProductsRequest) GetQuery() string {
+	if x != nil {
+		return x.Query
+	}
+	return ""
+}
+
 type ListProductsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Products      []*Product             `protobuf:"bytes,1,rep,name=products,proto3" json:"products,omitempty"`
@@ -133,7 +141,7 @@ func (x *ListProductsResponse) GetTotal() int64 {
 	return 0
 }
 
-// 定义 Product 消息
+// 定义 Product 消息 (完全保留你的定义)
 type Product struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -236,7 +244,7 @@ func (x *Product) GetSkuId() int64 {
 
 type GetProductRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"` // 这里其实是 sku_id
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -278,7 +286,6 @@ func (x *GetProductRequest) GetId() int64 {
 	return 0
 }
 
-// 保持扁平结构，方便 Order 服务直接调用
 type GetProductResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -379,8 +386,6 @@ func (x *GetProductResponse) GetSkuId() int64 {
 	return 0
 }
 
-// 修正：支持批量扣减（如果你想做批量），或者单体扣减。
-// 为了配合 Order 代码，我们这里保持单体扣减，修复 undefined Requests 报错
 type DecreaseStockRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	SkuId         int64                  `protobuf:"varint,1,opt,name=sku_id,json=skuId,proto3" json:"sku_id,omitempty"`
@@ -577,12 +582,13 @@ var File_proto_product_product_proto protoreflect.FileDescriptor
 
 const file_proto_product_product_proto_rawDesc = "" +
 	"\n" +
-	"\x1bproto/product/product.proto\x12\aproduct\"g\n" +
+	"\x1bproto/product/product.proto\x12\aproduct\"}\n" +
 	"\x13ListProductsRequest\x12\x12\n" +
 	"\x04page\x18\x01 \x01(\x05R\x04page\x12\x1b\n" +
 	"\tpage_size\x18\x02 \x01(\x05R\bpageSize\x12\x1f\n" +
 	"\vcategory_id\x18\x03 \x01(\x03R\n" +
-	"categoryId\"Z\n" +
+	"categoryId\x12\x14\n" +
+	"\x05query\x18\x04 \x01(\tR\x05query\"Z\n" +
 	"\x14ListProductsResponse\x12,\n" +
 	"\bproducts\x18\x01 \x03(\v2\x10.product.ProductR\bproducts\x12\x14\n" +
 	"\x05total\x18\x02 \x01(\x03R\x05total\"\xd2\x01\n" +

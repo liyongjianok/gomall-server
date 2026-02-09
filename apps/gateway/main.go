@@ -10,7 +10,7 @@ import (
 
 	"go-ecommerce/apps/gateway/middleware"
 	"go-ecommerce/pkg/config"
-	"go-ecommerce/pkg/response" // [新增] 引入响应包
+	"go-ecommerce/pkg/response"
 	"go-ecommerce/proto/address"
 	"go-ecommerce/proto/cart"
 	"go-ecommerce/proto/order"
@@ -48,21 +48,27 @@ func main() {
 		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy": "round_robin"}`),
 	}
 
+	// User Service
 	userConn, _ := grpc.Dial(fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "user-service"), connOpts...)
 	userClient := user.NewUserServiceClient(userConn)
 
+	// Product Service
 	prodConn, _ := grpc.Dial(fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "product-service"), connOpts...)
 	productClient := product.NewProductServiceClient(prodConn)
 
+	// Cart Service
 	cartConn, _ := grpc.Dial(fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "cart-service"), connOpts...)
 	cartClient := cart.NewCartServiceClient(cartConn)
 
+	// Order Service
 	orderConn, _ := grpc.Dial(fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "order-service"), connOpts...)
 	orderClient := order.NewOrderServiceClient(orderConn)
 
+	// Payment Service
 	payConn, _ := grpc.Dial(fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "payment-service"), connOpts...)
 	paymentClient := payment.NewPaymentServiceClient(payConn)
 
+	// Address Service
 	addrConn, err := grpc.Dial(fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "address-service"), connOpts...)
 	if err != nil {
 		log.Fatalf("did not connect address-service: %v", err)
@@ -76,7 +82,7 @@ func main() {
 	v1 := r.Group("/api/v1")
 
 	// ------------------------------------------
-	// 公开接口 (无需鉴权)
+	// 公开接口
 	// ------------------------------------------
 	{
 		v1.POST("/user/login", func(ctx *gin.Context) {
@@ -114,11 +120,19 @@ func main() {
 			response.Success(ctx, resp)
 		})
 
+		// 获取商品列表 (支持搜索 query)
 		v1.GET("/product/list", func(ctx *gin.Context) {
 			page, _ := strconv.Atoi(ctx.DefaultQuery("page", "1"))
 			pageSize, _ := strconv.Atoi(ctx.DefaultQuery("page_size", "10"))
 			catId, _ := strconv.ParseInt(ctx.DefaultQuery("category_id", "0"), 10, 64)
-			resp, err := productClient.ListProducts(context.Background(), &product.ListProductsRequest{Page: int32(page), PageSize: int32(pageSize), CategoryId: catId})
+			query := ctx.Query("query") // 接收 query 参数
+
+			resp, err := productClient.ListProducts(context.Background(), &product.ListProductsRequest{
+				Page:       int32(page),
+				PageSize:   int32(pageSize),
+				CategoryId: catId,
+				Query:      query, // 传递给 RPC
+			})
 			if err != nil {
 				response.Error(ctx, http.StatusInternalServerError, err.Error())
 				return
@@ -138,7 +152,7 @@ func main() {
 	}
 
 	// ------------------------------------------
-	// 受保护接口 (需 Authorization Bearer Token)
+	// 受保护接口
 	// ------------------------------------------
 	authed := v1.Group("/")
 	authed.Use(middleware.AuthMiddleware())
@@ -212,13 +226,11 @@ func main() {
 				return
 			}
 			userId := ctx.MustGet("userId").(int64)
-			// 调用 RPC
 			_, err := cartClient.AddItem(context.Background(), &cart.AddItemRequest{UserId: userId, Item: &cart.CartItem{SkuId: req.SkuId, Quantity: req.Quantity}})
 			if err != nil {
 				response.Error(ctx, http.StatusInternalServerError, err.Error())
 				return
 			}
-			// 返回成功 (购物车添加通常不返回具体数据)
 			response.Success(ctx, nil)
 		})
 
