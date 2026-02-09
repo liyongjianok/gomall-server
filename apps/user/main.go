@@ -2,22 +2,23 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"net"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
+	"time"
 
 	"go-ecommerce/apps/user/model"
 	"go-ecommerce/pkg/config"
 	"go-ecommerce/pkg/database"
 	"go-ecommerce/pkg/discovery"
-	"go-ecommerce/pkg/jwt" // [新增] 引入 JWT 工具包
-	"go-ecommerce/pkg/utils"
 	"go-ecommerce/proto/user"
 
+	"github.com/golang-jwt/jwt/v5"
+	"golang.org/x/crypto/bcrypt" // [恢复] 加密库
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/reflection"
@@ -25,117 +26,118 @@ import (
 	"gorm.io/gorm"
 )
 
+// [关键] 必须与 Gateway 保持一致
+var jwtSecret = []byte("my_secret_key")
+
 type server struct {
 	user.UnimplementedUserServiceServer
-	db *gorm.DB // 持有 DB 连接
+	db *gorm.DB
 }
 
-// Login 登录逻辑
-func (s *server) Login(ctx context.Context, req *user.LoginRequest) (*user.LoginResponse, error) {
-	var u model.User
-
-	// 1. 查询用户
-	if err := s.db.Where("username = ?", req.Username).First(&u).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return &user.LoginResponse{Code: 1, Msg: "User not found"}, nil
-		}
-		return nil, status.Error(codes.Internal, "Database error")
-	}
-
-	// 2. 校验密码
-	if !utils.CheckPassword(req.Password, u.Password) {
-		return &user.LoginResponse{Code: 2, Msg: "Incorrect password"}, nil
-	}
-
-	// 3. [修改] 生成真实的 JWT Token
-	token, err := jwt.GenerateToken(int64(u.ID), u.Username)
-	if err != nil {
-		log.Printf("Error generating token: %v", err)
-		return nil, status.Error(codes.Internal, "Failed to generate token")
-	}
-
-	return &user.LoginResponse{
-		Code:   0,
-		Msg:    "Login Success",
-		Token:  token, // 返回真实的 Token
-		UserId: int64(u.ID),
-	}, nil
-}
-
-// Register 注册逻辑
 func (s *server) Register(ctx context.Context, req *user.RegisterRequest) (*user.RegisterResponse, error) {
-	// 1. 检查用户是否存在
-	var count int64
-	s.db.Model(&model.User{}).Where("username = ?", req.Username).Count(&count)
-	if count > 0 {
-		return &user.RegisterResponse{Code: 1, Msg: "Username already exists"}, nil
+	var cnt int64
+	s.db.Model(&model.User{}).Where("username = ?", req.Username).Count(&cnt)
+	if cnt > 0 {
+		return nil, status.Error(codes.AlreadyExists, "Username already exists")
 	}
 
-	// 2. 密码加密
-	hashedPwd, err := utils.HashPassword(req.Password)
+	// [修复] 密码加密存储
+	hashedPwd, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
-		return nil, status.Error(codes.Internal, "Failed to hash password")
+		return nil, status.Error(codes.Internal, "Failed to encrypt password")
 	}
 
-	// 3. 创建用户
-	newUser := model.User{
+	u := model.User{
 		Username: req.Username,
-		Password: hashedPwd,
+		Password: string(hashedPwd), // 存入加密后的哈希值
 		Mobile:   req.Mobile,
 	}
 
-	if err := s.db.Create(&newUser).Error; err != nil {
+	if err := s.db.Create(&u).Error; err != nil {
 		return nil, status.Error(codes.Internal, "Failed to create user")
 	}
 
-	return &user.RegisterResponse{
-		Code: 0,
-		Msg:  "Register Success",
-	}, nil
+	return &user.RegisterResponse{Id: int64(u.ID)}, nil
+}
+
+func (s *server) Login(ctx context.Context, req *user.LoginRequest) (*user.LoginResponse, error) {
+	var u model.User
+	if err := s.db.Where("username = ?", req.Username).First(&u).Error; err != nil {
+		return nil, status.Error(codes.NotFound, "User not found")
+	}
+
+	// 密码比对逻辑 (数据库里的Hash vs 输入的明文)
+	err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(req.Password))
+	if err != nil {
+		return nil, status.Error(codes.Unauthenticated, "Invalid password")
+	}
+
+	// 生成 JWT
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"user_id": u.ID,
+		"exp":     time.Now().Add(time.Hour * 24 * 7).Unix(),
+		"iss":     "go-ecommerce",
+	})
+
+	tokenString, err := token.SignedString(jwtSecret)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "Failed to generate token")
+	}
+
+	return &user.LoginResponse{UserId: int64(u.ID), Token: tokenString}, nil
 }
 
 func main() {
-	// 1. 加载配置
 	c, err := config.LoadConfig(".")
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	// 2. 初始化数据库
+	// 环境变量适配
+	if v := os.Getenv("MYSQL_HOST"); v != "" {
+		c.Mysql.Host = v
+	}
+	if v := os.Getenv("MYSQL_PORT"); v != "" {
+		if p, err := strconv.Atoi(v); err == nil {
+			c.Mysql.Port = p
+		}
+	}
+	if v := os.Getenv("MYSQL_USER"); v != "" {
+		c.Mysql.User = v
+	}
+	if v := os.Getenv("MYSQL_PASSWORD"); v != "" {
+		c.Mysql.Password = v
+	}
+	if v := os.Getenv("MYSQL_DBNAME"); v != "" {
+		c.Mysql.DbName = v
+	}
+	if v := os.Getenv("CONSUL_ADDRESS"); v != "" {
+		c.Consul.Address = v
+	}
+
 	db, err := database.InitMySQL(c.Mysql)
 	if err != nil {
 		log.Fatalf("Failed to init mysql: %v", err)
 	}
+	db.AutoMigrate(&model.User{})
 
-	// 自动建表 (Auto Migrate)
-	// GORM 会根据 model 自动在 MySQL 中创建 users 表
-	if err := db.AutoMigrate(&model.User{}); err != nil {
-		log.Fatalf("Failed to migrate database: %v", err)
-	}
-
-	// 3. 监听端口
 	addr := fmt.Sprintf(":%d", c.Service.Port)
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
 
-	// 4. 注册到 Consul
-	// 注意：在 Docker 环境中，确保 RegisterService 内部获取的是容器 IP
 	err = discovery.RegisterService(c.Service.Name, c.Service.Port, c.Consul.Address)
 	if err != nil {
 		log.Fatalf("Failed to register service: %v", err)
 	}
 
-	// 5. 启动 gRPC Server
 	s := grpc.NewServer()
-	// 将 db 注入到 server 结构体中
 	user.RegisterUserServiceServer(s, &server{db: db})
 	reflection.Register(s)
 
 	log.Printf("User Service listening on %s", addr)
 
-	// 6. 优雅退出
 	go func() {
 		if err := s.Serve(lis); err != nil {
 			log.Fatalf("failed to serve: %v", err)
@@ -145,7 +147,5 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
-	log.Println("Shutting down server...")
-
 	s.GracefulStop()
 }

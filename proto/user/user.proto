@@ -2,25 +2,11 @@ syntax = "proto3";
 
 package user;
 
-option go_package = "go-ecommerce/proto/user;user";
+option go_package = "go-ecommerce/proto/user";
 
 service UserService {
-  // 登录
-  rpc Login(LoginRequest) returns (LoginResponse);
-  // 注册
   rpc Register(RegisterRequest) returns (RegisterResponse);
-}
-
-message LoginRequest {
-  string username = 1;
-  string password = 2;
-}
-
-message LoginResponse {
-  int32 code = 1;
-  string msg = 2;
-  string token = 3; // JWT Token
-  int64 user_id = 4;
+  rpc Login(LoginRequest) returns (LoginResponse);
 }
 
 message RegisterRequest {
@@ -29,7 +15,17 @@ message RegisterRequest {
   string mobile = 3;
 }
 
+// [修改] 之前只有 code/msg，现在改为返回 id
 message RegisterResponse {
-  int32 code = 1;
-  string msg = 2;
+  int64 id = 1; 
+}
+
+message LoginRequest {
+  string username = 1;
+  string password = 2;
+}
+
+message LoginResponse {
+  int64 user_id = 1;
+  string token = 2;
 }

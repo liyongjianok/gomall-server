@@ -5,6 +5,10 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
+	"os/signal"
+	"strconv"
+	"syscall"
 
 	"go-ecommerce/pkg/config"
 	"go-ecommerce/pkg/database"
@@ -18,7 +22,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// 定义数据库模型 (跟数据库表结构对应)
+// 定义数据库模型
 type Product struct {
 	ID          int64   `gorm:"primaryKey"`
 	Name        string  `gorm:"type:varchar(100)"`
@@ -74,7 +78,6 @@ func (s *server) ListProducts(ctx context.Context, req *product.ListProductsRequ
 }
 
 func (s *server) GetProduct(ctx context.Context, req *product.GetProductRequest) (*product.GetProductResponse, error) {
-	// 这里的逻辑是：req.Id 实际上是 SKU ID
 	var sku Sku
 	if err := s.db.First(&sku, req.Id).Error; err != nil {
 		return nil, status.Errorf(codes.NotFound, "Sku not found: %d", req.Id)
@@ -89,8 +92,8 @@ func (s *server) GetProduct(ctx context.Context, req *product.GetProductRequest)
 		Id:          p.ID,
 		Name:        p.Name,
 		Description: p.Description,
-		Picture:     p.Picture,          // 商品图
-		Price:       float32(sku.Price), // 使用 SKU 的价格
+		Picture:     p.Picture,
+		Price:       float32(sku.Price),
 		CategoryId:  p.CategoryID,
 		SkuName:     sku.Name,
 		SkuId:       sku.ID,
@@ -98,50 +101,37 @@ func (s *server) GetProduct(ctx context.Context, req *product.GetProductRequest)
 }
 
 func (s *server) DecreaseStock(ctx context.Context, req *product.DecreaseStockRequest) (*product.DecreaseStockResponse, error) {
-	// 开启事务
 	tx := s.db.Begin()
-
 	var sku Sku
-	// 锁定行 (FOR UPDATE) 防止并发超卖
 	if err := tx.Set("gorm:query_option", "FOR UPDATE").First(&sku, req.SkuId).Error; err != nil {
 		tx.Rollback()
 		return nil, status.Errorf(codes.NotFound, "Sku not found")
 	}
-
 	if sku.Stock < int(req.Count) {
 		tx.Rollback()
 		return nil, status.Error(codes.FailedPrecondition, "Stock not sufficient")
 	}
-
-	// 扣减
 	sku.Stock -= int(req.Count)
 	if err := tx.Model(&sku).Update("stock", sku.Stock).Error; err != nil {
 		tx.Rollback()
 		return nil, status.Error(codes.Internal, "Failed to update stock")
 	}
-
 	tx.Commit()
 	return &product.DecreaseStockResponse{Success: true}, nil
 }
 
-// RollbackStock 归还库存
 func (s *server) RollbackStock(ctx context.Context, req *product.RollbackStockRequest) (*product.RollbackStockResponse, error) {
 	tx := s.db.Begin()
-
 	var sku Sku
-	// 同样先锁定行，防止并发问题
 	if err := tx.Set("gorm:query_option", "FOR UPDATE").First(&sku, req.SkuId).Error; err != nil {
 		tx.Rollback()
 		return nil, status.Errorf(codes.NotFound, "Sku not found")
 	}
-
-	// 归还库存 (加法)
 	sku.Stock += int(req.Count)
 	if err := tx.Model(&sku).Update("stock", sku.Stock).Error; err != nil {
 		tx.Rollback()
 		return nil, status.Error(codes.Internal, "Failed to rollback stock")
 	}
-
 	tx.Commit()
 	return &product.RollbackStockResponse{Success: true}, nil
 }
@@ -150,6 +140,29 @@ func main() {
 	c, err := config.LoadConfig(".")
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
+	}
+
+	// [修正] 统一使用分拆配置
+	if v := os.Getenv("MYSQL_HOST"); v != "" {
+		c.Mysql.Host = v
+		log.Printf("Config Override: MYSQL_HOST used (%s)", v)
+	}
+	if v := os.Getenv("MYSQL_PORT"); v != "" {
+		if p, err := strconv.Atoi(v); err == nil {
+			c.Mysql.Port = p
+		}
+	}
+	if v := os.Getenv("MYSQL_USER"); v != "" {
+		c.Mysql.User = v
+	}
+	if v := os.Getenv("MYSQL_PASSWORD"); v != "" {
+		c.Mysql.Password = v
+	}
+	if v := os.Getenv("MYSQL_DBNAME"); v != "" {
+		c.Mysql.DbName = v // 注意大小写
+	}
+	if v := os.Getenv("CONSUL_ADDRESS"); v != "" {
+		c.Consul.Address = v
 	}
 
 	db, err := database.InitMySQL(c.Mysql)
@@ -175,7 +188,14 @@ func main() {
 
 	log.Printf("Product Service listening on %s", addr)
 
-	if err := s.Serve(lis); err != nil {
-		log.Fatalf("failed to serve: %v", err)
-	}
+	go func() {
+		if err := s.Serve(lis); err != nil {
+			log.Fatalf("failed to serve: %v", err)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	s.GracefulStop()
 }

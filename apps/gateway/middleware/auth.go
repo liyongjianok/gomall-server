@@ -4,41 +4,50 @@ import (
 	"net/http"
 	"strings"
 
-	"go-ecommerce/pkg/jwt"
-
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 )
 
+// [关键] 必须和 User Service 一致
+var jwtSecret = []byte("my_secret_key")
+
 func AuthMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// 1. 获取 Header 里的 Authorization
-		authHeader := c.GetHeader("Authorization")
+	return func(ctx *gin.Context) {
+		authHeader := ctx.GetHeader("Authorization")
 		if authHeader == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header required"})
-			c.Abort()
+			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Authorization header is missing"})
 			return
 		}
 
-		// 2. 格式通常是 "Bearer <token>"
 		parts := strings.SplitN(authHeader, " ", 2)
 		if len(parts) != 2 || parts[0] != "Bearer" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header format must be Bearer {token}"})
-			c.Abort()
+			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid authorization format"})
+			return
+		}
+		tokenString := parts[1]
+
+		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, jwt.ErrSignatureInvalid
+			}
+			return jwtSecret, nil
+		})
+
+		if err != nil || !token.Valid {
+			// 这里的错误通常就是 "Invalid token"
+			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
 			return
 		}
 
-		// 3. 解析 Token
-		claims, err := jwt.ParseToken(parts[1])
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
-			c.Abort()
-			return
+		if claims, ok := token.Claims.(jwt.MapClaims); ok {
+			if userIdFloat, ok := claims["user_id"].(float64); ok {
+				ctx.Set("userId", int64(userIdFloat))
+			} else {
+				ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
+				return
+			}
 		}
 
-		// 4. 将解析出来的 user_id 存入 Context，供后续 Handler 使用
-		c.Set("userId", claims.UserId)
-		c.Set("username", claims.Username)
-
-		c.Next()
+		ctx.Next()
 	}
 }
