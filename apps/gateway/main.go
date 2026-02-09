@@ -6,10 +6,10 @@ import (
 	"log"
 	"net/http"
 	"strconv"
-	"time"
 
-	"go-ecommerce/apps/gateway/middleware" // [新增] 引入认证中间件
+	"go-ecommerce/apps/gateway/middleware"
 	"go-ecommerce/pkg/config"
+	"go-ecommerce/proto/address" // [新增]
 	"go-ecommerce/proto/cart"
 	"go-ecommerce/proto/order"
 	"go-ecommerce/proto/payment"
@@ -23,86 +23,79 @@ import (
 )
 
 func main() {
-	// 1. 加载配置
 	c, err := config.LoadConfig(".")
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
 	// ==========================================
-	// 初始化 gRPC 连接 (User Service)
+	// 初始化 gRPC 连接 (User)
 	// ==========================================
-	userTarget := fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "user-service")
-	userConn, err := grpc.Dial(
-		userTarget,
+	userConn, _ := grpc.Dial(
+		fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "user-service"),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy": "round_robin"}`),
 	)
-	if err != nil {
-		log.Fatalf("did not connect user-service: %v", err)
-	}
 	defer userConn.Close()
 	userClient := user.NewUserServiceClient(userConn)
 
 	// ==========================================
-	// 初始化 gRPC 连接 (Product Service)
+	// 初始化 gRPC 连接 (Product)
 	// ==========================================
-	productTarget := fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "product-service")
-	productConn, err := grpc.Dial(
-		productTarget,
+	prodConn, _ := grpc.Dial(
+		fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "product-service"),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy": "round_robin"}`),
 	)
-	if err != nil {
-		log.Fatalf("did not connect product-service: %v", err)
-	}
-	defer productConn.Close()
-	productClient := product.NewProductServiceClient(productConn)
+	defer prodConn.Close()
+	productClient := product.NewProductServiceClient(prodConn)
 
 	// ==========================================
-	// 初始化 gRPC 连接 (Cart Service)
+	// 初始化 gRPC 连接 (Cart)
 	// ==========================================
-	cartTarget := fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "cart-service")
-	cartConn, err := grpc.Dial(
-		cartTarget,
+	cartConn, _ := grpc.Dial(
+		fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "cart-service"),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy": "round_robin"}`),
 	)
-	if err != nil {
-		log.Fatalf("did not connect cart-service: %v", err)
-	}
 	defer cartConn.Close()
 	cartClient := cart.NewCartServiceClient(cartConn)
 
 	// ==========================================
-	// 初始化 gRPC 连接 (Order Service)
+	// 初始化 gRPC 连接 (Order)
 	// ==========================================
-	orderTarget := fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "order-service")
-	orderConn, err := grpc.Dial(
-		orderTarget,
+	orderConn, _ := grpc.Dial(
+		fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "order-service"),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy": "round_robin"}`),
 	)
-	if err != nil {
-		log.Fatalf("did not connect order-service: %v", err)
-	}
 	defer orderConn.Close()
 	orderClient := order.NewOrderServiceClient(orderConn)
 
 	// ==========================================
-	// 初始化 gRPC 连接 (Payment Service)
+	// 初始化 gRPC 连接 (Payment)
 	// ==========================================
-	paymentTarget := fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "payment-service")
-	paymentConn, err := grpc.Dial(
-		paymentTarget,
+	payConn, _ := grpc.Dial(
+		fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "payment-service"),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy": "round_robin"}`),
+	)
+	defer payConn.Close()
+	paymentClient := payment.NewPaymentServiceClient(payConn)
+
+	// ==========================================
+	// [新增] 初始化 gRPC 连接 (Address)
+	// ==========================================
+	addrConn, err := grpc.Dial(
+		fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "address-service"),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy": "round_robin"}`),
 	)
 	if err != nil {
-		log.Fatalf("did not connect payment-service: %v", err)
+		log.Fatalf("did not connect address-service: %v", err)
 	}
-	defer paymentConn.Close()
-	paymentClient := payment.NewPaymentServiceClient(paymentConn)
+	defer addrConn.Close()
+	addressClient := address.NewAddressServiceClient(addrConn)
 
 	// ==========================================
 	// 启动 Gin 路由
@@ -110,11 +103,8 @@ func main() {
 	r := gin.Default()
 	v1 := r.Group("/api/v1")
 
-	// ---------------------------------------------------------
-	// 公开接口 (不需要登录)
-	// ---------------------------------------------------------
+	// 公开接口
 	{
-		// 用户登录/注册
 		v1.POST("/user/login", func(ctx *gin.Context) {
 			var req struct {
 				Username string `json:"username" binding:"required"`
@@ -124,12 +114,7 @@ func main() {
 				ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 				return
 			}
-			rpcCtx, cancel := context.WithTimeout(context.Background(), time.Second)
-			defer cancel()
-			resp, err := userClient.Login(rpcCtx, &user.LoginRequest{
-				Username: req.Username,
-				Password: req.Password,
-			})
+			resp, err := userClient.Login(context.Background(), &user.LoginRequest{Username: req.Username, Password: req.Password})
 			if err != nil {
 				ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
@@ -147,13 +132,7 @@ func main() {
 				ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 				return
 			}
-			rpcCtx, cancel := context.WithTimeout(context.Background(), time.Second)
-			defer cancel()
-			resp, err := userClient.Register(rpcCtx, &user.RegisterRequest{
-				Username: req.Username,
-				Password: req.Password,
-				Mobile:   req.Mobile,
-			})
+			resp, err := userClient.Register(context.Background(), &user.RegisterRequest{Username: req.Username, Password: req.Password, Mobile: req.Mobile})
 			if err != nil {
 				ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
@@ -161,55 +140,94 @@ func main() {
 			ctx.JSON(http.StatusOK, gin.H{"data": resp})
 		})
 
-		// 商品列表/详情
 		v1.GET("/product/list", func(ctx *gin.Context) {
 			page, _ := strconv.Atoi(ctx.DefaultQuery("page", "1"))
 			pageSize, _ := strconv.Atoi(ctx.DefaultQuery("page_size", "10"))
-			categoryId, _ := strconv.ParseInt(ctx.DefaultQuery("category_id", "0"), 10, 64)
-
-			rpcCtx, cancel := context.WithTimeout(context.Background(), time.Second)
-			defer cancel()
-
-			resp, err := productClient.ListProducts(rpcCtx, &product.ListProductsRequest{
-				Page:       int32(page),
-				PageSize:   int32(pageSize),
-				CategoryId: categoryId,
-			})
+			catId, _ := strconv.ParseInt(ctx.DefaultQuery("category_id", "0"), 10, 64)
+			resp, err := productClient.ListProducts(context.Background(), &product.ListProductsRequest{Page: int32(page), PageSize: int32(pageSize), CategoryId: catId})
 			if err != nil {
-				ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch products"})
+				ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
 			ctx.JSON(http.StatusOK, gin.H{"data": resp})
 		})
 
 		v1.GET("/product/detail", func(ctx *gin.Context) {
-			idStr := ctx.Query("id")
-			id, err := strconv.ParseInt(idStr, 10, 64)
+			id, _ := strconv.ParseInt(ctx.Query("id"), 10, 64)
+			resp, err := productClient.GetProduct(context.Background(), &product.GetProductRequest{Id: id})
 			if err != nil {
-				ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid product ID"})
-				return
-			}
-			rpcCtx, cancel := context.WithTimeout(context.Background(), time.Second)
-			defer cancel()
-			resp, err := productClient.GetProduct(rpcCtx, &product.GetProductRequest{Id: id})
-			if err != nil {
-				ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch product detail"})
+				ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
 			ctx.JSON(http.StatusOK, gin.H{"data": resp})
 		})
 	}
 
-	// ---------------------------------------------------------
-	// 受保护接口 (需要 JWT Token 登录)
-	// ---------------------------------------------------------
+	// 受保护接口
 	authed := v1.Group("/")
-	authed.Use(middleware.AuthMiddleware()) // 挂载认证中间件
+	authed.Use(middleware.AuthMiddleware())
 	{
-		// ----------- 购物车相关 -----------
+		// ----------- Address -----------
+		authed.POST("/address/add", func(ctx *gin.Context) {
+			var req address.CreateAddressRequest
+			if err := ctx.ShouldBindJSON(&req); err != nil {
+				ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			req.UserId = ctx.MustGet("userId").(int64)
+
+			resp, err := addressClient.CreateAddress(context.Background(), &req)
+			if err != nil {
+				ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			ctx.JSON(http.StatusOK, gin.H{"data": resp})
+		})
+
+		authed.GET("/address/list", func(ctx *gin.Context) {
+			userId := ctx.MustGet("userId").(int64)
+			resp, err := addressClient.ListAddress(context.Background(), &address.ListAddressRequest{UserId: userId})
+			if err != nil {
+				ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			ctx.JSON(http.StatusOK, gin.H{"data": resp})
+		})
+
+		authed.POST("/address/update", func(ctx *gin.Context) {
+			var req address.UpdateAddressRequest
+			if err := ctx.ShouldBindJSON(&req); err != nil {
+				ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			req.UserId = ctx.MustGet("userId").(int64)
+			resp, err := addressClient.UpdateAddress(context.Background(), &req)
+			if err != nil {
+				ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			ctx.JSON(http.StatusOK, gin.H{"data": resp})
+		})
+
+		authed.POST("/address/delete", func(ctx *gin.Context) {
+			var req struct {
+				AddressId int64 `json:"address_id"`
+			}
+			if err := ctx.ShouldBindJSON(&req); err != nil {
+				ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			resp, err := addressClient.DeleteAddress(context.Background(), &address.DeleteAddressRequest{AddressId: req.AddressId, UserId: ctx.MustGet("userId").(int64)})
+			if err != nil {
+				ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			ctx.JSON(http.StatusOK, gin.H{"data": resp})
+		})
+
+		// ----------- Cart -----------
 		authed.POST("/cart/add", func(ctx *gin.Context) {
 			var req struct {
-				// UserId int64 `json:"user_id"` <--- 已移除，直接从 Token 获取
 				SkuId    int64 `json:"sku_id" binding:"required"`
 				Quantity int32 `json:"quantity" binding:"required"`
 			}
@@ -217,23 +235,10 @@ func main() {
 				ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 				return
 			}
-
-			// 安全地从 Context 获取 UserId
 			userId := ctx.MustGet("userId").(int64)
-
-			rpcCtx, cancel := context.WithTimeout(context.Background(), time.Second)
-			defer cancel()
-
-			resp, err := cartClient.AddItem(rpcCtx, &cart.AddItemRequest{
-				UserId: userId,
-				Item: &cart.CartItem{
-					SkuId:    req.SkuId,
-					Quantity: req.Quantity,
-				},
-			})
+			resp, err := cartClient.AddItem(context.Background(), &cart.AddItemRequest{UserId: userId, Item: &cart.CartItem{SkuId: req.SkuId, Quantity: req.Quantity}})
 			if err != nil {
-				log.Printf("Cart Add Error: %v", err)
-				ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add to cart"})
+				ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
 			ctx.JSON(http.StatusOK, gin.H{"data": resp})
@@ -241,41 +246,26 @@ func main() {
 
 		authed.GET("/cart/list", func(ctx *gin.Context) {
 			userId := ctx.MustGet("userId").(int64)
-
-			rpcCtx, cancel := context.WithTimeout(context.Background(), time.Second)
-			defer cancel()
-
-			resp, err := cartClient.GetCart(rpcCtx, &cart.GetCartRequest{
-				UserId: userId,
-			})
+			resp, err := cartClient.GetCart(context.Background(), &cart.GetCartRequest{UserId: userId})
 			if err != nil {
-				log.Printf("Cart Get Error: %v", err)
-				ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get cart"})
+				ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
 			ctx.JSON(http.StatusOK, gin.H{"data": resp})
 		})
 
-		// ----------- 订单相关 -----------
+		// ----------- Order -----------
 		authed.POST("/order/create", func(ctx *gin.Context) {
-			// 下单只需 Token，无需额外参数
 			userId := ctx.MustGet("userId").(int64)
-
-			rpcCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-
-			resp, err := orderClient.CreateOrder(rpcCtx, &order.CreateOrderRequest{
-				UserId: userId,
-			})
+			// 注意：这里暂时还没把 AddressId 加进去，下一步我们再加
+			resp, err := orderClient.CreateOrder(context.Background(), &order.CreateOrderRequest{UserId: userId})
 			if err != nil {
-				log.Printf("Create Order Error: %v", err)
-				ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create order"})
+				ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
 			ctx.JSON(http.StatusOK, gin.H{"data": resp})
 		})
 
-		// 取消订单
 		authed.POST("/order/cancel", func(ctx *gin.Context) {
 			var req struct {
 				OrderNo string `json:"order_no" binding:"required"`
@@ -284,16 +274,8 @@ func main() {
 				ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 				return
 			}
-
 			userId := ctx.MustGet("userId").(int64)
-
-			rpcCtx, cancel := context.WithTimeout(context.Background(), time.Second)
-			defer cancel()
-
-			resp, err := orderClient.CancelOrder(rpcCtx, &order.CancelOrderRequest{
-				OrderNo: req.OrderNo,
-				UserId:  userId,
-			})
+			resp, err := orderClient.CancelOrder(context.Background(), &order.CancelOrderRequest{OrderNo: req.OrderNo, UserId: userId})
 			if err != nil {
 				ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
@@ -303,21 +285,15 @@ func main() {
 
 		authed.GET("/order/list", func(ctx *gin.Context) {
 			userId := ctx.MustGet("userId").(int64)
-
-			rpcCtx, cancel := context.WithTimeout(context.Background(), time.Second)
-			defer cancel()
-
-			resp, err := orderClient.ListOrders(rpcCtx, &order.ListOrdersRequest{
-				UserId: userId,
-			})
+			resp, err := orderClient.ListOrders(context.Background(), &order.ListOrdersRequest{UserId: userId})
 			if err != nil {
-				ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list orders"})
+				ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
 			ctx.JSON(http.StatusOK, gin.H{"data": resp})
 		})
 
-		// ----------- 支付相关 -----------
+		// ----------- Payment -----------
 		authed.POST("/payment/pay", func(ctx *gin.Context) {
 			var req struct {
 				OrderNo string  `json:"order_no" binding:"required"`
@@ -327,20 +303,9 @@ func main() {
 				ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 				return
 			}
-
-			// 可以在这里校验一下 Order 是否属于 ctx.MustGet("userId")
-			// 这里先保持简化逻辑
-
-			rpcCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-			defer cancel()
-
-			resp, err := paymentClient.Pay(rpcCtx, &payment.PayRequest{
-				OrderNo: req.OrderNo,
-				Amount:  req.Amount,
-			})
+			resp, err := paymentClient.Pay(context.Background(), &payment.PayRequest{OrderNo: req.OrderNo, Amount: req.Amount})
 			if err != nil {
-				log.Printf("Payment Error: %v", err)
-				ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Payment failed"})
+				ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
 			ctx.JSON(http.StatusOK, gin.H{"data": resp})

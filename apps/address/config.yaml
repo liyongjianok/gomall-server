@@ -1,0 +1,15 @@
+service:
+  name: "address-service"
+  port: 50056
+
+mysql:
+  # 注意：代码可能优先读取以下字段，而不是 DSN 字符串
+  host: "127.0.0.1"
+  port: 3306
+  user: "root"
+  password: "root" # 请确保这是你本地的密码
+  dbname: "db_user" # 共用 db_user 库
+  charset: "utf8mb4"
+  
+consul:
+  address: "127.0.0.1:8500"

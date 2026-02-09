@@ -90,6 +90,30 @@ services:
     ports:
       - "50055:50055"
 
+  address-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_PATH: apps/address
+    image: go-ecommerce-address-service
+    container_name: go-ecommerce-address-service-1
+    ports:
+      - "50056:50056"
+    depends_on:
+      - mysql
+      - consul
+    environment:
+      - SERVICE_NAME=address-service
+      - SERVICE_PORT=50056
+      - CONSUL_ADDRESS=consul:8500
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=root
+      - MYSQL_DBNAME=db_user
+    restart: always
+
   gateway:
     build:
       context: .
