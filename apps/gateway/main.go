@@ -18,11 +18,40 @@ import (
 	"go-ecommerce/proto/product"
 	"go-ecommerce/proto/user"
 
+	sentinel "github.com/alibaba/sentinel-golang/api" // [新增]
+	"github.com/alibaba/sentinel-golang/core/base"
+	"github.com/alibaba/sentinel-golang/core/flow"
 	"github.com/gin-gonic/gin"
 	_ "github.com/mbobakov/grpc-consul-resolver"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
+
+// 定义资源名称
+const ResSeckill = "seckill_api"
+
+// initSentinel 初始化限流规则
+func initSentinel() {
+	err := sentinel.InitDefault()
+	if err != nil {
+		log.Fatalf("初始化 Sentinel 失败: %v", err)
+	}
+
+	// 配置流控规则
+	_, err = flow.LoadRules([]*flow.Rule{
+		{
+			Resource:               ResSeckill,  // 资源名称
+			TokenCalculateStrategy: flow.Direct, // 直接计数
+			ControlBehavior:        flow.Reject, // 直接拒绝
+			Threshold:              5,           // [关键] QPS 限制为 5 (每秒只许通过 5 个请求)
+			StatIntervalInMs:       1000,        // 统计周期 1秒
+		},
+	})
+	if err != nil {
+		log.Fatalf("加载 Sentinel 规则失败: %v", err)
+	}
+	log.Println("Sentinel 限流规则已加载: 秒杀接口 QPS Limit = 5")
+}
 
 func main() {
 	c, err := config.LoadConfig(".")
@@ -30,7 +59,7 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	// 适配 Docker 环境变量
+	// 环境变量适配
 	if v := os.Getenv("CONSUL_ADDRESS"); v != "" {
 		c.Consul.Address = v
 	}
@@ -40,50 +69,41 @@ func main() {
 		}
 	}
 
-	// ==========================================
+	// [新增] 初始化限流器
+	initSentinel()
+
 	// 初始化 gRPC 连接
-	// ==========================================
 	connOpts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy": "round_robin"}`),
 	}
 
-	// User Service
 	userConn, _ := grpc.Dial(fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "user-service"), connOpts...)
 	userClient := user.NewUserServiceClient(userConn)
 
-	// Product Service
 	prodConn, _ := grpc.Dial(fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "product-service"), connOpts...)
 	productClient := product.NewProductServiceClient(prodConn)
 
-	// Cart Service
 	cartConn, _ := grpc.Dial(fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "cart-service"), connOpts...)
 	cartClient := cart.NewCartServiceClient(cartConn)
 
-	// Order Service
 	orderConn, _ := grpc.Dial(fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "order-service"), connOpts...)
 	orderClient := order.NewOrderServiceClient(orderConn)
 
-	// Payment Service
 	payConn, _ := grpc.Dial(fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "payment-service"), connOpts...)
 	paymentClient := payment.NewPaymentServiceClient(payConn)
 
-	// Address Service
 	addrConn, err := grpc.Dial(fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "address-service"), connOpts...)
 	if err != nil {
 		log.Fatalf("did not connect address-service: %v", err)
 	}
 	addressClient := address.NewAddressServiceClient(addrConn)
 
-	// ==========================================
-	// 启动 Gin 路由
-	// ==========================================
+	// 启动 Gin
 	r := gin.Default()
 	v1 := r.Group("/api/v1")
 
-	// ------------------------------------------
 	// 公开接口
-	// ------------------------------------------
 	{
 		v1.POST("/user/login", func(ctx *gin.Context) {
 			var req struct {
@@ -120,18 +140,17 @@ func main() {
 			response.Success(ctx, resp)
 		})
 
-		// 获取商品列表 (支持搜索 query)
 		v1.GET("/product/list", func(ctx *gin.Context) {
 			page, _ := strconv.Atoi(ctx.DefaultQuery("page", "1"))
 			pageSize, _ := strconv.Atoi(ctx.DefaultQuery("page_size", "10"))
 			catId, _ := strconv.ParseInt(ctx.DefaultQuery("category_id", "0"), 10, 64)
-			query := ctx.Query("query") // 接收 query 参数
+			query := ctx.Query("query")
 
 			resp, err := productClient.ListProducts(context.Background(), &product.ListProductsRequest{
 				Page:       int32(page),
 				PageSize:   int32(pageSize),
 				CategoryId: catId,
-				Query:      query, // 传递给 RPC
+				Query:      query,
 			})
 			if err != nil {
 				response.Error(ctx, http.StatusInternalServerError, err.Error())
@@ -151,13 +170,11 @@ func main() {
 		})
 	}
 
-	// ------------------------------------------
 	// 受保护接口
-	// ------------------------------------------
 	authed := v1.Group("/")
 	authed.Use(middleware.AuthMiddleware())
 	{
-		// ----------- Address -----------
+		// Address
 		authed.POST("/address/add", func(ctx *gin.Context) {
 			var req address.CreateAddressRequest
 			if err := ctx.ShouldBindJSON(&req); err != nil {
@@ -165,7 +182,6 @@ func main() {
 				return
 			}
 			req.UserId = ctx.MustGet("userId").(int64)
-
 			resp, err := addressClient.CreateAddress(context.Background(), &req)
 			if err != nil {
 				response.Error(ctx, http.StatusInternalServerError, err.Error())
@@ -215,7 +231,7 @@ func main() {
 			response.Success(ctx, resp)
 		})
 
-		// ----------- Cart -----------
+		// Cart
 		authed.POST("/cart/add", func(ctx *gin.Context) {
 			var req struct {
 				SkuId    int64 `json:"sku_id" binding:"required"`
@@ -244,7 +260,7 @@ func main() {
 			response.Success(ctx, resp)
 		})
 
-		// ----------- Order -----------
+		// Order
 		authed.POST("/order/create", func(ctx *gin.Context) {
 			var req struct {
 				AddressId int64 `json:"address_id" binding:"required"`
@@ -253,12 +269,8 @@ func main() {
 				response.Error(ctx, http.StatusBadRequest, "必须选择收货地址 (address_id)")
 				return
 			}
-
 			userId := ctx.MustGet("userId").(int64)
-			resp, err := orderClient.CreateOrder(context.Background(), &order.CreateOrderRequest{
-				UserId:    userId,
-				AddressId: req.AddressId,
-			})
+			resp, err := orderClient.CreateOrder(context.Background(), &order.CreateOrderRequest{UserId: userId, AddressId: req.AddressId})
 			if err != nil {
 				response.Error(ctx, http.StatusInternalServerError, err.Error())
 				return
@@ -293,7 +305,36 @@ func main() {
 			response.Success(ctx, resp)
 		})
 
-		// ----------- Payment -----------
+		// [修改] Seckill 增加 Sentinel 限流埋点
+		authed.POST("/product/seckill", func(ctx *gin.Context) {
+			// 1. Sentinel 入口检查
+			e, b := sentinel.Entry(ResSeckill, sentinel.WithTrafficType(base.Inbound))
+			if b != nil {
+				// 被限流了
+				response.Error(ctx, http.StatusTooManyRequests, "系统繁忙，请稍后再试")
+				return
+			}
+			defer e.Exit() // 务必退出
+
+			// 2. 正常业务逻辑
+			var req struct {
+				SkuId int64 `json:"sku_id" binding:"required"`
+			}
+			if err := ctx.ShouldBindJSON(&req); err != nil {
+				response.Error(ctx, http.StatusBadRequest, err.Error())
+				return
+			}
+			userId := ctx.MustGet("userId").(int64)
+
+			resp, err := productClient.SeckillProduct(context.Background(), &product.SeckillProductRequest{UserId: userId, SkuId: req.SkuId})
+			if err != nil {
+				response.Error(ctx, http.StatusInternalServerError, err.Error())
+				return
+			}
+			response.Success(ctx, resp)
+		})
+
+		// Payment
 		authed.POST("/payment/pay", func(ctx *gin.Context) {
 			var req struct {
 				OrderNo string  `json:"order_no" binding:"required"`
@@ -305,28 +346,6 @@ func main() {
 			}
 			resp, err := paymentClient.Pay(context.Background(), &payment.PayRequest{OrderNo: req.OrderNo, Amount: req.Amount})
 			if err != nil {
-				response.Error(ctx, http.StatusInternalServerError, err.Error())
-				return
-			}
-			response.Success(ctx, resp)
-		})
-		// ----------- Seckill -----------
-		authed.POST("/product/seckill", func(ctx *gin.Context) {
-			var req struct {
-				SkuId int64 `json:"sku_id" binding:"required"`
-			}
-			if err := ctx.ShouldBindJSON(&req); err != nil {
-				response.Error(ctx, http.StatusBadRequest, err.Error())
-				return
-			}
-			userId := ctx.MustGet("userId").(int64)
-
-			resp, err := productClient.SeckillProduct(context.Background(), &product.SeckillProductRequest{
-				UserId: userId,
-				SkuId:  req.SkuId,
-			})
-			if err != nil {
-				// 这里可以直接返回 RPC 的错误信息，比如 "手慢了"
 				response.Error(ctx, http.StatusInternalServerError, err.Error())
 				return
 			}
