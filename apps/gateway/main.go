@@ -256,9 +256,20 @@ func main() {
 
 		// ----------- Order -----------
 		authed.POST("/order/create", func(ctx *gin.Context) {
+			var req struct {
+				AddressId int64 `json:"address_id" binding:"required"` // 必须传地址ID
+			}
+			if err := ctx.ShouldBindJSON(&req); err != nil {
+				ctx.JSON(http.StatusBadRequest, gin.H{"error": "Address ID is required (address_id)"})
+				return
+			}
+
 			userId := ctx.MustGet("userId").(int64)
-			// 注意：这里暂时还没把 AddressId 加进去，下一步我们再加
-			resp, err := orderClient.CreateOrder(context.Background(), &order.CreateOrderRequest{UserId: userId})
+
+			resp, err := orderClient.CreateOrder(context.Background(), &order.CreateOrderRequest{
+				UserId:    userId,
+				AddressId: req.AddressId, // [新增] 传入 RPC
+			})
 			if err != nil {
 				ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return

@@ -5,22 +5,19 @@ package order;
 option go_package = "go-ecommerce/proto/order";
 
 service OrderService {
-  // 创建订单
   rpc CreateOrder(CreateOrderRequest) returns (CreateOrderResponse);
-  // 获取订单列表
   rpc ListOrders(ListOrdersRequest) returns (ListOrdersResponse);
-  // 标记订单为已支付 (供 Payment Service 调用)
   rpc MarkOrderPaid(MarkOrderPaidRequest) returns (MarkOrderPaidResponse);
-  // 取消订单
   rpc CancelOrder(CancelOrderRequest) returns (CancelOrderResponse);
 }
 
 message CreateOrderRequest {
   int64 user_id = 1;
+  int64 address_id = 2; // [新增] 下单必须选地址
 }
 
 message CreateOrderResponse {
-  string order_no = 1; 
+  string order_no = 1;
   float total_amount = 2;
 }
 
@@ -35,9 +32,14 @@ message ListOrdersResponse {
 message OrderInfo {
   string order_no = 1;
   float total_amount = 2;
-  int32 status = 3; // 0:待支付, 1:已支付
-  string created_at = 4; // [新增] 下单时间
-  repeated OrderItem items = 5; // [保留] 你的商品详情列表
+  int32 status = 3;
+  string created_at = 4;
+  repeated OrderItem items = 5;
+  
+  // [新增] 地址快照信息
+  string receiver_name = 6;
+  string receiver_mobile = 7;
+  string receiver_address = 8;
 }
 
 message OrderItem {
@@ -45,7 +47,7 @@ message OrderItem {
   string sku_name = 2;
   float price = 3;
   int32 quantity = 4;
-  string picture = 5; // [建议新增] 商品图片
+  string picture = 5;
 }
 
 message MarkOrderPaidRequest {
@@ -58,7 +60,7 @@ message MarkOrderPaidResponse {
 
 message CancelOrderRequest {
   string order_no = 1;
-  int64 user_id = 2; // 需要校验这是谁的订单，防止恶意取消别人的
+  int64 user_id = 2;
 }
 
 message CancelOrderResponse {

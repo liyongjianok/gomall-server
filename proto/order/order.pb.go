@@ -24,6 +24,7 @@ const (
 type CreateOrderRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	UserId        int64                  `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	AddressId     int64                  `protobuf:"varint,2,opt,name=address_id,json=addressId,proto3" json:"address_id,omitempty"` // [新增] 下单必须选地址
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -61,6 +62,13 @@ func (*CreateOrderRequest) Descriptor() ([]byte, []int) {
 func (x *CreateOrderRequest) GetUserId() int64 {
 	if x != nil {
 		return x.UserId
+	}
+	return 0
+}
+
+func (x *CreateOrderRequest) GetAddressId() int64 {
+	if x != nil {
+		return x.AddressId
 	}
 	return 0
 }
@@ -206,14 +214,18 @@ func (x *ListOrdersResponse) GetOrders() []*OrderInfo {
 }
 
 type OrderInfo struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	OrderNo       string                 `protobuf:"bytes,1,opt,name=order_no,json=orderNo,proto3" json:"order_no,omitempty"`
-	TotalAmount   float32                `protobuf:"fixed32,2,opt,name=total_amount,json=totalAmount,proto3" json:"total_amount,omitempty"`
-	Status        int32                  `protobuf:"varint,3,opt,name=status,proto3" json:"status,omitempty"`                       // 0:待支付, 1:已支付
-	CreatedAt     string                 `protobuf:"bytes,4,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"` // [新增] 下单时间
-	Items         []*OrderItem           `protobuf:"bytes,5,rep,name=items,proto3" json:"items,omitempty"`                          // [保留] 你的商品详情列表
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	OrderNo     string                 `protobuf:"bytes,1,opt,name=order_no,json=orderNo,proto3" json:"order_no,omitempty"`
+	TotalAmount float32                `protobuf:"fixed32,2,opt,name=total_amount,json=totalAmount,proto3" json:"total_amount,omitempty"`
+	Status      int32                  `protobuf:"varint,3,opt,name=status,proto3" json:"status,omitempty"`
+	CreatedAt   string                 `protobuf:"bytes,4,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	Items       []*OrderItem           `protobuf:"bytes,5,rep,name=items,proto3" json:"items,omitempty"`
+	// [新增] 地址快照信息
+	ReceiverName    string `protobuf:"bytes,6,opt,name=receiver_name,json=receiverName,proto3" json:"receiver_name,omitempty"`
+	ReceiverMobile  string `protobuf:"bytes,7,opt,name=receiver_mobile,json=receiverMobile,proto3" json:"receiver_mobile,omitempty"`
+	ReceiverAddress string `protobuf:"bytes,8,opt,name=receiver_address,json=receiverAddress,proto3" json:"receiver_address,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *OrderInfo) Reset() {
@@ -281,13 +293,34 @@ func (x *OrderInfo) GetItems() []*OrderItem {
 	return nil
 }
 
+func (x *OrderInfo) GetReceiverName() string {
+	if x != nil {
+		return x.ReceiverName
+	}
+	return ""
+}
+
+func (x *OrderInfo) GetReceiverMobile() string {
+	if x != nil {
+		return x.ReceiverMobile
+	}
+	return ""
+}
+
+func (x *OrderInfo) GetReceiverAddress() string {
+	if x != nil {
+		return x.ReceiverAddress
+	}
+	return ""
+}
+
 type OrderItem struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ProductName   string                 `protobuf:"bytes,1,opt,name=product_name,json=productName,proto3" json:"product_name,omitempty"`
 	SkuName       string                 `protobuf:"bytes,2,opt,name=sku_name,json=skuName,proto3" json:"sku_name,omitempty"`
 	Price         float32                `protobuf:"fixed32,3,opt,name=price,proto3" json:"price,omitempty"`
 	Quantity      int32                  `protobuf:"varint,4,opt,name=quantity,proto3" json:"quantity,omitempty"`
-	Picture       string                 `protobuf:"bytes,5,opt,name=picture,proto3" json:"picture,omitempty"` // [建议新增] 商品图片
+	Picture       string                 `protobuf:"bytes,5,opt,name=picture,proto3" json:"picture,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -448,7 +481,7 @@ func (x *MarkOrderPaidResponse) GetSuccess() bool {
 type CancelOrderRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	OrderNo       string                 `protobuf:"bytes,1,opt,name=order_no,json=orderNo,proto3" json:"order_no,omitempty"`
-	UserId        int64                  `protobuf:"varint,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"` // 需要校验这是谁的订单，防止恶意取消别人的
+	UserId        int64                  `protobuf:"varint,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -545,23 +578,28 @@ var File_proto_order_order_proto protoreflect.FileDescriptor
 
 const file_proto_order_order_proto_rawDesc = "" +
 	"\n" +
-	"\x17proto/order/order.proto\x12\x05order\"-\n" +
+	"\x17proto/order/order.proto\x12\x05order\"L\n" +
 	"\x12CreateOrderRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\x03R\x06userId\"S\n" +
+	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12\x1d\n" +
+	"\n" +
+	"address_id\x18\x02 \x01(\x03R\taddressId\"S\n" +
 	"\x13CreateOrderResponse\x12\x19\n" +
 	"\border_no\x18\x01 \x01(\tR\aorderNo\x12!\n" +
 	"\ftotal_amount\x18\x02 \x01(\x02R\vtotalAmount\",\n" +
 	"\x11ListOrdersRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x03R\x06userId\">\n" +
 	"\x12ListOrdersResponse\x12(\n" +
-	"\x06orders\x18\x01 \x03(\v2\x10.order.OrderInfoR\x06orders\"\xa8\x01\n" +
+	"\x06orders\x18\x01 \x03(\v2\x10.order.OrderInfoR\x06orders\"\xa1\x02\n" +
 	"\tOrderInfo\x12\x19\n" +
 	"\border_no\x18\x01 \x01(\tR\aorderNo\x12!\n" +
 	"\ftotal_amount\x18\x02 \x01(\x02R\vtotalAmount\x12\x16\n" +
 	"\x06status\x18\x03 \x01(\x05R\x06status\x12\x1d\n" +
 	"\n" +
 	"created_at\x18\x04 \x01(\tR\tcreatedAt\x12&\n" +
-	"\x05items\x18\x05 \x03(\v2\x10.order.OrderItemR\x05items\"\x95\x01\n" +
+	"\x05items\x18\x05 \x03(\v2\x10.order.OrderItemR\x05items\x12#\n" +
+	"\rreceiver_name\x18\x06 \x01(\tR\freceiverName\x12'\n" +
+	"\x0freceiver_mobile\x18\a \x01(\tR\x0ereceiverMobile\x12)\n" +
+	"\x10receiver_address\x18\b \x01(\tR\x0freceiverAddress\"\x95\x01\n" +
 	"\tOrderItem\x12!\n" +
 	"\fproduct_name\x18\x01 \x01(\tR\vproductName\x12\x19\n" +
 	"\bsku_name\x18\x02 \x01(\tR\askuName\x12\x14\n" +

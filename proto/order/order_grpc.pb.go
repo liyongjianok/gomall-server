@@ -29,13 +29,9 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type OrderServiceClient interface {
-	// 创建订单
 	CreateOrder(ctx context.Context, in *CreateOrderRequest, opts ...grpc.CallOption) (*CreateOrderResponse, error)
-	// 获取订单列表
 	ListOrders(ctx context.Context, in *ListOrdersRequest, opts ...grpc.CallOption) (*ListOrdersResponse, error)
-	// 标记订单为已支付 (供 Payment Service 调用)
 	MarkOrderPaid(ctx context.Context, in *MarkOrderPaidRequest, opts ...grpc.CallOption) (*MarkOrderPaidResponse, error)
-	// 取消订单
 	CancelOrder(ctx context.Context, in *CancelOrderRequest, opts ...grpc.CallOption) (*CancelOrderResponse, error)
 }
 
@@ -91,13 +87,9 @@ func (c *orderServiceClient) CancelOrder(ctx context.Context, in *CancelOrderReq
 // All implementations must embed UnimplementedOrderServiceServer
 // for forward compatibility.
 type OrderServiceServer interface {
-	// 创建订单
 	CreateOrder(context.Context, *CreateOrderRequest) (*CreateOrderResponse, error)
-	// 获取订单列表
 	ListOrders(context.Context, *ListOrdersRequest) (*ListOrdersResponse, error)
-	// 标记订单为已支付 (供 Payment Service 调用)
 	MarkOrderPaid(context.Context, *MarkOrderPaidRequest) (*MarkOrderPaidResponse, error)
-	// 取消订单
 	CancelOrder(context.Context, *CancelOrderRequest) (*CancelOrderResponse, error)
 	mustEmbedUnimplementedOrderServiceServer()
 }
