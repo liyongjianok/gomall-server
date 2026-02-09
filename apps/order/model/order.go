@@ -10,7 +10,7 @@ type Order struct {
 	TotalAmount float64 `gorm:"type:decimal(10,2)"`
 	Status      int     `gorm:"default:0"` // 0:待支付 1:已支付 2:已取消
 
-	// [新增] 地址快照字段
+	// 地址快照字段
 	ReceiverName    string `gorm:"type:varchar(50)"`
 	ReceiverMobile  string `gorm:"type:varchar(20)"`
 	ReceiverAddress string `gorm:"type:varchar(255)"` // 省市区+详细地址的拼接

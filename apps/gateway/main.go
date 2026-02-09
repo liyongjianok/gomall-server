@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 
 	"go-ecommerce/apps/gateway/middleware"
 	"go-ecommerce/pkg/config"
-	"go-ecommerce/proto/address" // [新增]
+	"go-ecommerce/pkg/response" // [新增] 引入响应包
+	"go-ecommerce/proto/address"
 	"go-ecommerce/proto/cart"
 	"go-ecommerce/proto/order"
 	"go-ecommerce/proto/payment"
@@ -28,73 +30,43 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
+	// 适配 Docker 环境变量
+	if v := os.Getenv("CONSUL_ADDRESS"); v != "" {
+		c.Consul.Address = v
+	}
+	if v := os.Getenv("SERVICE_PORT"); v != "" {
+		if p, err := strconv.Atoi(v); err == nil {
+			c.Service.Port = p
+		}
+	}
+
 	// ==========================================
-	// 初始化 gRPC 连接 (User)
+	// 初始化 gRPC 连接
 	// ==========================================
-	userConn, _ := grpc.Dial(
-		fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "user-service"),
+	connOpts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy": "round_robin"}`),
-	)
-	defer userConn.Close()
+	}
+
+	userConn, _ := grpc.Dial(fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "user-service"), connOpts...)
 	userClient := user.NewUserServiceClient(userConn)
 
-	// ==========================================
-	// 初始化 gRPC 连接 (Product)
-	// ==========================================
-	prodConn, _ := grpc.Dial(
-		fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "product-service"),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy": "round_robin"}`),
-	)
-	defer prodConn.Close()
+	prodConn, _ := grpc.Dial(fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "product-service"), connOpts...)
 	productClient := product.NewProductServiceClient(prodConn)
 
-	// ==========================================
-	// 初始化 gRPC 连接 (Cart)
-	// ==========================================
-	cartConn, _ := grpc.Dial(
-		fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "cart-service"),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy": "round_robin"}`),
-	)
-	defer cartConn.Close()
+	cartConn, _ := grpc.Dial(fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "cart-service"), connOpts...)
 	cartClient := cart.NewCartServiceClient(cartConn)
 
-	// ==========================================
-	// 初始化 gRPC 连接 (Order)
-	// ==========================================
-	orderConn, _ := grpc.Dial(
-		fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "order-service"),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy": "round_robin"}`),
-	)
-	defer orderConn.Close()
+	orderConn, _ := grpc.Dial(fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "order-service"), connOpts...)
 	orderClient := order.NewOrderServiceClient(orderConn)
 
-	// ==========================================
-	// 初始化 gRPC 连接 (Payment)
-	// ==========================================
-	payConn, _ := grpc.Dial(
-		fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "payment-service"),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy": "round_robin"}`),
-	)
-	defer payConn.Close()
+	payConn, _ := grpc.Dial(fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "payment-service"), connOpts...)
 	paymentClient := payment.NewPaymentServiceClient(payConn)
 
-	// ==========================================
-	// [新增] 初始化 gRPC 连接 (Address)
-	// ==========================================
-	addrConn, err := grpc.Dial(
-		fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "address-service"),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy": "round_robin"}`),
-	)
+	addrConn, err := grpc.Dial(fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "address-service"), connOpts...)
 	if err != nil {
 		log.Fatalf("did not connect address-service: %v", err)
 	}
-	defer addrConn.Close()
 	addressClient := address.NewAddressServiceClient(addrConn)
 
 	// ==========================================
@@ -103,7 +75,9 @@ func main() {
 	r := gin.Default()
 	v1 := r.Group("/api/v1")
 
-	// 公开接口
+	// ------------------------------------------
+	// 公开接口 (无需鉴权)
+	// ------------------------------------------
 	{
 		v1.POST("/user/login", func(ctx *gin.Context) {
 			var req struct {
@@ -111,15 +85,15 @@ func main() {
 				Password string `json:"password" binding:"required"`
 			}
 			if err := ctx.ShouldBindJSON(&req); err != nil {
-				ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				response.Error(ctx, http.StatusBadRequest, err.Error())
 				return
 			}
 			resp, err := userClient.Login(context.Background(), &user.LoginRequest{Username: req.Username, Password: req.Password})
 			if err != nil {
-				ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				response.Error(ctx, http.StatusInternalServerError, err.Error())
 				return
 			}
-			ctx.JSON(http.StatusOK, gin.H{"data": resp})
+			response.Success(ctx, resp)
 		})
 
 		v1.POST("/user/register", func(ctx *gin.Context) {
@@ -129,15 +103,15 @@ func main() {
 				Mobile   string `json:"mobile"`
 			}
 			if err := ctx.ShouldBindJSON(&req); err != nil {
-				ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				response.Error(ctx, http.StatusBadRequest, err.Error())
 				return
 			}
 			resp, err := userClient.Register(context.Background(), &user.RegisterRequest{Username: req.Username, Password: req.Password, Mobile: req.Mobile})
 			if err != nil {
-				ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				response.Error(ctx, http.StatusInternalServerError, err.Error())
 				return
 			}
-			ctx.JSON(http.StatusOK, gin.H{"data": resp})
+			response.Success(ctx, resp)
 		})
 
 		v1.GET("/product/list", func(ctx *gin.Context) {
@@ -146,24 +120,26 @@ func main() {
 			catId, _ := strconv.ParseInt(ctx.DefaultQuery("category_id", "0"), 10, 64)
 			resp, err := productClient.ListProducts(context.Background(), &product.ListProductsRequest{Page: int32(page), PageSize: int32(pageSize), CategoryId: catId})
 			if err != nil {
-				ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				response.Error(ctx, http.StatusInternalServerError, err.Error())
 				return
 			}
-			ctx.JSON(http.StatusOK, gin.H{"data": resp})
+			response.Success(ctx, resp)
 		})
 
 		v1.GET("/product/detail", func(ctx *gin.Context) {
 			id, _ := strconv.ParseInt(ctx.Query("id"), 10, 64)
 			resp, err := productClient.GetProduct(context.Background(), &product.GetProductRequest{Id: id})
 			if err != nil {
-				ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				response.Error(ctx, http.StatusInternalServerError, err.Error())
 				return
 			}
-			ctx.JSON(http.StatusOK, gin.H{"data": resp})
+			response.Success(ctx, resp)
 		})
 	}
 
-	// 受保护接口
+	// ------------------------------------------
+	// 受保护接口 (需 Authorization Bearer Token)
+	// ------------------------------------------
 	authed := v1.Group("/")
 	authed.Use(middleware.AuthMiddleware())
 	{
@@ -171,42 +147,42 @@ func main() {
 		authed.POST("/address/add", func(ctx *gin.Context) {
 			var req address.CreateAddressRequest
 			if err := ctx.ShouldBindJSON(&req); err != nil {
-				ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				response.Error(ctx, http.StatusBadRequest, err.Error())
 				return
 			}
 			req.UserId = ctx.MustGet("userId").(int64)
 
 			resp, err := addressClient.CreateAddress(context.Background(), &req)
 			if err != nil {
-				ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				response.Error(ctx, http.StatusInternalServerError, err.Error())
 				return
 			}
-			ctx.JSON(http.StatusOK, gin.H{"data": resp})
+			response.Success(ctx, resp)
 		})
 
 		authed.GET("/address/list", func(ctx *gin.Context) {
 			userId := ctx.MustGet("userId").(int64)
 			resp, err := addressClient.ListAddress(context.Background(), &address.ListAddressRequest{UserId: userId})
 			if err != nil {
-				ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				response.Error(ctx, http.StatusInternalServerError, err.Error())
 				return
 			}
-			ctx.JSON(http.StatusOK, gin.H{"data": resp})
+			response.Success(ctx, resp)
 		})
 
 		authed.POST("/address/update", func(ctx *gin.Context) {
 			var req address.UpdateAddressRequest
 			if err := ctx.ShouldBindJSON(&req); err != nil {
-				ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				response.Error(ctx, http.StatusBadRequest, err.Error())
 				return
 			}
 			req.UserId = ctx.MustGet("userId").(int64)
 			resp, err := addressClient.UpdateAddress(context.Background(), &req)
 			if err != nil {
-				ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				response.Error(ctx, http.StatusInternalServerError, err.Error())
 				return
 			}
-			ctx.JSON(http.StatusOK, gin.H{"data": resp})
+			response.Success(ctx, resp)
 		})
 
 		authed.POST("/address/delete", func(ctx *gin.Context) {
@@ -214,15 +190,15 @@ func main() {
 				AddressId int64 `json:"address_id"`
 			}
 			if err := ctx.ShouldBindJSON(&req); err != nil {
-				ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				response.Error(ctx, http.StatusBadRequest, err.Error())
 				return
 			}
 			resp, err := addressClient.DeleteAddress(context.Background(), &address.DeleteAddressRequest{AddressId: req.AddressId, UserId: ctx.MustGet("userId").(int64)})
 			if err != nil {
-				ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				response.Error(ctx, http.StatusInternalServerError, err.Error())
 				return
 			}
-			ctx.JSON(http.StatusOK, gin.H{"data": resp})
+			response.Success(ctx, resp)
 		})
 
 		// ----------- Cart -----------
@@ -232,49 +208,50 @@ func main() {
 				Quantity int32 `json:"quantity" binding:"required"`
 			}
 			if err := ctx.ShouldBindJSON(&req); err != nil {
-				ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				response.Error(ctx, http.StatusBadRequest, err.Error())
 				return
 			}
 			userId := ctx.MustGet("userId").(int64)
-			resp, err := cartClient.AddItem(context.Background(), &cart.AddItemRequest{UserId: userId, Item: &cart.CartItem{SkuId: req.SkuId, Quantity: req.Quantity}})
+			// 调用 RPC
+			_, err := cartClient.AddItem(context.Background(), &cart.AddItemRequest{UserId: userId, Item: &cart.CartItem{SkuId: req.SkuId, Quantity: req.Quantity}})
 			if err != nil {
-				ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				response.Error(ctx, http.StatusInternalServerError, err.Error())
 				return
 			}
-			ctx.JSON(http.StatusOK, gin.H{"data": resp})
+			// 返回成功 (购物车添加通常不返回具体数据)
+			response.Success(ctx, nil)
 		})
 
 		authed.GET("/cart/list", func(ctx *gin.Context) {
 			userId := ctx.MustGet("userId").(int64)
 			resp, err := cartClient.GetCart(context.Background(), &cart.GetCartRequest{UserId: userId})
 			if err != nil {
-				ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				response.Error(ctx, http.StatusInternalServerError, err.Error())
 				return
 			}
-			ctx.JSON(http.StatusOK, gin.H{"data": resp})
+			response.Success(ctx, resp)
 		})
 
 		// ----------- Order -----------
 		authed.POST("/order/create", func(ctx *gin.Context) {
 			var req struct {
-				AddressId int64 `json:"address_id" binding:"required"` // 必须传地址ID
+				AddressId int64 `json:"address_id" binding:"required"`
 			}
 			if err := ctx.ShouldBindJSON(&req); err != nil {
-				ctx.JSON(http.StatusBadRequest, gin.H{"error": "Address ID is required (address_id)"})
+				response.Error(ctx, http.StatusBadRequest, "必须选择收货地址 (address_id)")
 				return
 			}
 
 			userId := ctx.MustGet("userId").(int64)
-
 			resp, err := orderClient.CreateOrder(context.Background(), &order.CreateOrderRequest{
 				UserId:    userId,
-				AddressId: req.AddressId, // [新增] 传入 RPC
+				AddressId: req.AddressId,
 			})
 			if err != nil {
-				ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				response.Error(ctx, http.StatusInternalServerError, err.Error())
 				return
 			}
-			ctx.JSON(http.StatusOK, gin.H{"data": resp})
+			response.Success(ctx, resp)
 		})
 
 		authed.POST("/order/cancel", func(ctx *gin.Context) {
@@ -282,26 +259,26 @@ func main() {
 				OrderNo string `json:"order_no" binding:"required"`
 			}
 			if err := ctx.ShouldBindJSON(&req); err != nil {
-				ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				response.Error(ctx, http.StatusBadRequest, err.Error())
 				return
 			}
 			userId := ctx.MustGet("userId").(int64)
 			resp, err := orderClient.CancelOrder(context.Background(), &order.CancelOrderRequest{OrderNo: req.OrderNo, UserId: userId})
 			if err != nil {
-				ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				response.Error(ctx, http.StatusInternalServerError, err.Error())
 				return
 			}
-			ctx.JSON(http.StatusOK, gin.H{"data": resp})
+			response.Success(ctx, resp)
 		})
 
 		authed.GET("/order/list", func(ctx *gin.Context) {
 			userId := ctx.MustGet("userId").(int64)
 			resp, err := orderClient.ListOrders(context.Background(), &order.ListOrdersRequest{UserId: userId})
 			if err != nil {
-				ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				response.Error(ctx, http.StatusInternalServerError, err.Error())
 				return
 			}
-			ctx.JSON(http.StatusOK, gin.H{"data": resp})
+			response.Success(ctx, resp)
 		})
 
 		// ----------- Payment -----------
@@ -311,15 +288,15 @@ func main() {
 				Amount  float32 `json:"amount"`
 			}
 			if err := ctx.ShouldBindJSON(&req); err != nil {
-				ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				response.Error(ctx, http.StatusBadRequest, err.Error())
 				return
 			}
 			resp, err := paymentClient.Pay(context.Background(), &payment.PayRequest{OrderNo: req.OrderNo, Amount: req.Amount})
 			if err != nil {
-				ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				response.Error(ctx, http.StatusInternalServerError, err.Error())
 				return
 			}
-			ctx.JSON(http.StatusOK, gin.H{"data": resp})
+			response.Success(ctx, resp)
 		})
 	}
 
