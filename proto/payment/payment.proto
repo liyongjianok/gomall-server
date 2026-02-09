@@ -15,5 +15,5 @@ message PayRequest {
 
 message PayResponse {
   bool success = 1;
-  string tx_id = 2; // [关键] 对应 Go 里的 TxId
+  string transaction_id = 2; // 模拟的流水号
 }

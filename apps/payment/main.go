@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math/rand"
 	"net"
 	"os"
 	"os/signal"
@@ -12,7 +13,7 @@ import (
 
 	"go-ecommerce/pkg/config"
 	"go-ecommerce/pkg/discovery"
-	"go-ecommerce/proto/order" // [新增] 引入 Order Proto
+	"go-ecommerce/proto/order"
 	"go-ecommerce/proto/payment"
 
 	_ "github.com/mbobakov/grpc-consul-resolver"
@@ -25,63 +26,65 @@ import (
 
 type server struct {
 	payment.UnimplementedPaymentServiceServer
-	orderClient order.OrderServiceClient // [新增] 持有 Order 客户端
+	orderClient order.OrderServiceClient
 }
 
+// Pay 支付接口
 func (s *server) Pay(ctx context.Context, req *payment.PayRequest) (*payment.PayResponse, error) {
-	log.Printf("Received payment request for Order: %s, Amount: %.2f", req.OrderNo, req.Amount)
+	log.Printf("收到支付请求: 订单号 %s, 金额 %.2f", req.OrderNo, req.Amount)
 
-	// 1. 模拟调用第三方支付 (支付宝/微信)
-	// 这里我们简单 sleep 1秒，假设支付成功
-	time.Sleep(1 * time.Second)
+	// 1. 模拟与第三方支付网关（支付宝/微信）的交互延迟
+	time.Sleep(time.Duration(500+rand.Intn(1000)) * time.Millisecond)
 
-	// 2. 支付成功，调用 Order Service 更新订单状态
-	// 注意：这里需要传入 context，最好带超时
-	rpcCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
+	// 2. 模拟支付成功 (生成一个随机流水号)
+	// 实际场景中这里需要验证签名、金额等
+	transactionId := fmt.Sprintf("ALIPAY_%d", time.Now().UnixNano())
+	log.Printf("第三方支付成功，流水号: %s", transactionId)
 
-	_, err := s.orderClient.MarkOrderPaid(rpcCtx, &order.MarkOrderPaidRequest{
+	// 3. 关键步骤：调用 Order Service 修改订单状态
+	// 这是微服务间典型的 RPC 调用
+	_, err := s.orderClient.MarkOrderPaid(ctx, &order.MarkOrderPaidRequest{
 		OrderNo: req.OrderNo,
 	})
-
 	if err != nil {
-		log.Printf("CRITICAL: Payment successful but failed to update order status: %v", err)
-		// 在真实系统中，这里需要重试机制 (MQ) 或人工介入
-		return nil, status.Errorf(codes.Internal, "Payment processed but order status update failed")
+		log.Printf("回调订单服务失败: %v", err)
+		// 实际场景这里需要重试机制 (或写入消息队列进行最终一致性保障)
+		return nil, status.Error(codes.Internal, "支付成功但更新订单状态失败")
 	}
 
-	log.Printf("Order %s paid successfully", req.OrderNo)
+	log.Printf("订单 %s 状态已更新为[已支付]", req.OrderNo)
 
 	return &payment.PayResponse{
-		Success: true,
-		TxId:    fmt.Sprintf("tx_%d", time.Now().UnixNano()), // 生成一个模拟的流水号
+		Success:       true,
+		TransactionId: transactionId,
 	}, nil
 }
 
 func main() {
+	// 1. 加载配置
 	c, err := config.LoadConfig(".")
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	// =====================================
-	// 连接 Order Service
-	// =====================================
-	orderTarget := fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "order-service")
+	// 环境变量适配
+	if v := os.Getenv("CONSUL_ADDRESS"); v != "" {
+		c.Consul.Address = v
+	}
+
+	// 2. 初始化 gRPC 连接 (连接 Order Service)
+	// 因为 Payment 服务需要回调 Order 服务
 	orderConn, err := grpc.Dial(
-		orderTarget,
+		fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "order-service"),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy": "round_robin"}`),
 	)
 	if err != nil {
-		log.Fatalf("did not connect order-service: %v", err)
+		log.Fatalf("Failed to connect to order service: %v", err)
 	}
-	defer orderConn.Close()
 	orderClient := order.NewOrderServiceClient(orderConn)
 
-	// =====================================
-	// 启动 Payment Service
-	// =====================================
+	// 3. 启动服务
 	addr := fmt.Sprintf(":%d", c.Service.Port)
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -95,12 +98,11 @@ func main() {
 
 	s := grpc.NewServer()
 	payment.RegisterPaymentServiceServer(s, &server{
-		orderClient: orderClient, // 注入 Order Client
+		orderClient: orderClient,
 	})
 	reflection.Register(s)
 
 	log.Printf("Payment Service listening on %s", addr)
-
 	go func() {
 		if err := s.Serve(lis); err != nil {
 			log.Fatalf("failed to serve: %v", err)
