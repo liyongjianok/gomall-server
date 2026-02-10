@@ -38,7 +38,6 @@ import (
 const ResSeckill = "seckill_api"
 
 // initSentinel 初始化 Sentinel 限流规则
-// 作用：保护后端服务，防止高并发瞬间压垮系统
 func initSentinel() {
 	err := sentinel.InitDefault()
 	if err != nil {
@@ -114,9 +113,7 @@ func main() {
 	connOpts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),                // 禁用 TLS (内网通信)
 		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy": "round_robin"}`), // 轮询负载均衡
-
-		// [核心] 添加 OTEL 拦截器：自动把 Trace ID 注入到 gRPC Metadata 中传给下游
-		grpc.WithUnaryInterceptor(otelgrpc.UnaryClientInterceptor()),
+		grpc.WithUnaryInterceptor(otelgrpc.UnaryClientInterceptor()),            // 添加 OTEL 拦截器：自动把 Trace ID 注入到 gRPC Metadata 中传给下游
 	}
 
 	// 连接 User Service
@@ -151,7 +148,7 @@ func main() {
 	// ==========================================
 	r := gin.Default()
 
-	// [核心] 添加 Gin 追踪中间件：拦截所有 HTTP 请求，生成 Trace ID
+	// 添加 Gin 追踪中间件：拦截所有 HTTP 请求，生成 Trace ID
 	r.Use(otelgin.Middleware("gateway"))
 
 	v1 := r.Group("/api/v1")
@@ -320,6 +317,24 @@ func main() {
 				return
 			}
 			response.Success(ctx, resp)
+		})
+
+		// 🔥🔥🔥 新增：删除购物车商品 🔥🔥🔥
+		authed.POST("/cart/delete", func(ctx *gin.Context) {
+			var req struct {
+				SkuId int64 `json:"sku_id" binding:"required"`
+			}
+			if err := ctx.ShouldBindJSON(&req); err != nil {
+				response.Error(ctx, http.StatusBadRequest, err.Error())
+				return
+			}
+			userId := ctx.MustGet("userId").(int64)
+			_, err := cartClient.DeleteItem(ctx.Request.Context(), &cart.DeleteItemRequest{UserId: userId, SkuId: req.SkuId})
+			if err != nil {
+				response.Error(ctx, http.StatusInternalServerError, err.Error())
+				return
+			}
+			response.Success(ctx, nil)
 		})
 
 		// --- 订单管理 ---

@@ -11,6 +11,8 @@ service CartService {
   rpc GetCart(GetCartRequest) returns (GetCartResponse);
   // 清空购物车
   rpc EmptyCart(EmptyCartRequest) returns (EmptyCartResponse);
+  // 购物车删除商品
+  rpc DeleteItem(DeleteItemRequest) returns (DeleteItemResponse);
 }
 
 message CartItem {
@@ -43,4 +45,14 @@ message EmptyCartRequest {
 
 message EmptyCartResponse {
   bool success = 1;
+}
+
+message DeleteItemRequest {
+  int64 user_id = 1;
+  int64 sku_id = 2;
+}
+
+message DeleteItemResponse {
+  int32 code = 1;
+  string msg = 2;
 }

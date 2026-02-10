@@ -26,11 +26,14 @@ type server struct {
 	rdb *redis.Client
 }
 
+// AddItem 添加商品 (已修复为累加逻辑)
 func (s *server) AddItem(ctx context.Context, req *cart.AddItemRequest) (*cart.AddItemResponse, error) {
 	key := fmt.Sprintf("cart:%d", req.UserId)
 	field := fmt.Sprintf("%d", req.Item.SkuId)
 
-	err := s.rdb.HSet(ctx, key, field, req.Item.Quantity).Err()
+	// 使用 HIncrBy 进行累加，而不是 HSet 覆盖
+	// 如果字段不存在，它会从 0 开始加；如果存在，就在原值基础上加
+	err := s.rdb.HIncrBy(ctx, key, field, int64(req.Item.Quantity)).Err()
 	if err != nil {
 		return nil, status.Error(codes.Internal, "Redis error")
 	}
@@ -38,6 +41,7 @@ func (s *server) AddItem(ctx context.Context, req *cart.AddItemRequest) (*cart.A
 	return &cart.AddItemResponse{Code: 0, Msg: "Success"}, nil
 }
 
+// GetCart 获取购物车列表
 func (s *server) GetCart(ctx context.Context, req *cart.GetCartRequest) (*cart.GetCartResponse, error) {
 	key := fmt.Sprintf("cart:%d", req.UserId)
 
@@ -59,6 +63,20 @@ func (s *server) GetCart(ctx context.Context, req *cart.GetCartRequest) (*cart.G
 	return &cart.GetCartResponse{Items: items}, nil
 }
 
+// DeleteItem 删除购物车中的单个商品
+func (s *server) DeleteItem(ctx context.Context, req *cart.DeleteItemRequest) (*cart.DeleteItemResponse, error) {
+	key := fmt.Sprintf("cart:%d", req.UserId)
+	field := fmt.Sprintf("%d", req.SkuId)
+
+	// 使用 HDel 删除指定 SKU
+	err := s.rdb.HDel(ctx, key, field).Err()
+	if err != nil {
+		return nil, status.Error(codes.Internal, "Redis delete error")
+	}
+	return &cart.DeleteItemResponse{Code: 0, Msg: "Success"}, nil
+}
+
+// EmptyCart 清空购物车
 func (s *server) EmptyCart(ctx context.Context, req *cart.EmptyCartRequest) (*cart.EmptyCartResponse, error) {
 	key := fmt.Sprintf("cart:%d", req.UserId)
 	if err := s.rdb.Del(ctx, key).Err(); err != nil {
