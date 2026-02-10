@@ -187,6 +187,9 @@ Developed with ❤️ by  **Huarou** .
 如果你觉得这个项目对你有帮助，请给个 Star ⭐️！
 
 ```
+
+
+
 # protoc命令生成
 protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative proto/cart/cart.proto
 
@@ -239,4 +242,9 @@ docker-compose -f docker-compose-full.yml logs -f user-service
 
 PowerShell
 docker-compose -f docker-compose-full.yml down -v
+
+
+5. 精准清除 Elasticsearch 索引,redis
+docker exec deploy-elasticsearch curl -X DELETE http://localhost:9200/products
+docker exec deploy-redis redis-cli FLUSHALL
 ```
