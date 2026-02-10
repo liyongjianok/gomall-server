@@ -1,4 +1,3 @@
-
 # 🛍️ Go Microservices Ecommerce System (Go微服务电商系统)![Microservices Architecture Diagram的图片](https://encrypted-tbn3.gstatic.com/licensed-image?q=tbn:ANd9GcQiDB_UeyPIoNWGPkQTcqQOoGURoHRVJ4A_kTfnp1ieahwq1enJenhgU-9cwwNVZnme2ZaQbzcYZwhhTEUemDEI9uJm9xnf14HUIrHRUMZfcGMOhoM)**Shutterstock**
 
 基于 **Go (Gin + gRPC)** 构建的高性能、高并发、企业级微服务电商系统。
@@ -186,3 +185,58 @@ go run scripts/seckill_load.go
 Developed with ❤️ by  **Huarou** .
 
 如果你觉得这个项目对你有帮助，请给个 Star ⭐️！
+
+```
+# protoc命令生成
+protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative proto/cart/cart.proto
+
+容器命令
+🚀 启动与构建
+后台启动所有服务 (最常用)：
+
+PowerShell
+docker-compose -f docker-compose-full.yml up -d
+(加上 -d 是为了让它在后台跑，不会占住你的终端)
+
+重新构建并启动 (当你修改了 Go 代码后)：
+
+PowerShell
+docker-compose -f docker-compose-full.yml up -d --build
+只启动某个特定服务 (例如只重启网关)：
+
+PowerShell
+docker-compose -f docker-compose-full.yml up -d gateway
+2. 🛑 停止与重启
+停止所有服务 (保留数据卷)：
+
+PowerShell
+docker-compose -f docker-compose-full.yml stop
+停止并删除容器 (清理环境，下次启动会重新创建容器，但保留数据)：
+
+PowerShell
+docker-compose -f docker-compose-full.yml down
+重启某个服务 (修改配置或代码后)：
+
+PowerShell
+docker-compose -f docker-compose-full.yml restart user-service
+3. 🔍 查看状态与日志
+查看运行中的容器：
+
+PowerShell
+docker-compose -f docker-compose-full.yml ps
+实时查看所有日志：
+
+PowerShell
+docker-compose -f docker-compose-full.yml logs -f
+查看某个服务的日志 (比如排查为什么 User Service 挂了)：
+
+PowerShell
+docker-compose -f docker-compose-full.yml logs -f user-service
+(加上 --tail 100 可以只看最后 100 行，防止日志太长)
+
+4. 🧹 彻底清理 (核弹操作)
+停止服务 + 删除容器 + 删除所有数据卷 (相当于重置回出厂设置，数据会丢失！)：
+
+PowerShell
+docker-compose -f docker-compose-full.yml down -v
+```

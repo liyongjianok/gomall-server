@@ -1,13 +1,18 @@
 version: '3.8'
 
 services:
-  # ==================== 基础设施 ====================
+  # ==================== 基础设施 (带健康检查) ====================
   consul:
     image: consul:1.15
     container_name: deploy-consul
     ports:
       - "8500:8500"
     command: agent -server -bind=0.0.0.0 -client=0.0.0.0 -bootstrap-expect=1 -ui
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8500/v1/status/leader" ]
+      interval: 10s
+      timeout: 10s
+      retries: 5
 
   mysql:
     image: mysql:8.0
@@ -19,35 +24,55 @@ services:
     volumes:
       - ./deploy/mysql-init:/docker-entrypoint-initdb.d
       - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot" ]
+      interval: 10s
+      timeout: 10s
+      retries: 5
 
   redis:
     image: redis:7.0
     container_name: deploy-redis
     ports:
       - "6379:6379"
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   rabbitmq:
     image: rabbitmq:3.11-management
     container_name: go-ecommerce-rabbitmq
     ports:
-      - "5672:5672" # 应用连接端口
-      - "15672:15672" # 管理界面端口
+      - "5672:5672"
+      - "15672:15672"
     environment:
       - RABBITMQ_DEFAULT_USER=guest
       - RABBITMQ_DEFAULT_PASS=guest
     restart: always
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "-q", "ping" ]
+      interval: 10s
+      timeout: 10s
+      retries: 5
 
   elasticsearch:
     image: elasticsearch:7.17.13
     container_name: deploy-elasticsearch
     environment:
       - discovery.type=single-node
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m" # 限制内存使用
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
     ports:
       - "9200:9200"
     volumes:
       - es_data:/usr/share/elasticsearch/data
     restart: always
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://localhost:9200/_cat/health || exit 1" ]
+      interval: 10s
+      timeout: 10s
+      retries: 5
 
   kibana:
     image: kibana:7.17.13
@@ -57,20 +82,21 @@ services:
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
     depends_on:
-      - elasticsearch
+      elasticsearch:
+        condition: service_healthy # 等 ES 健康才启动
     restart: always
 
   jaeger:
     image: jaegertracing/all-in-one:1.50
     container_name: deploy-jaeger
     environment:
-      - COLLECTOR_OTLP_ENABLED=true # 开启 OTLP 接收器
+      - COLLECTOR_OTLP_ENABLED=true
     ports:
-      - "16686:16686" # UI 面板端口
-      - "4318:4318" # OTLP HTTP 接收端口
+      - "16686:16686"
+      - "4318:4318"
     restart: always
 
-  # ==================== 微服务 ====================
+  # ==================== 微服务 (智能等待基础设施) ====================
   user-service:
     build:
       context: .
@@ -79,8 +105,10 @@ services:
         APP_PATH: apps/user
     container_name: go-ecommerce-user-service
     depends_on:
-      - consul
-      - mysql
+      consul:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
     ports:
       - "50051:50051"
     environment:
@@ -97,9 +125,12 @@ services:
         APP_PATH: apps/product
     container_name: go-ecommerce-product-service
     depends_on:
-      - consul
-      - mysql
-      - elasticsearch
+      consul:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
     ports:
       - "50052:50052"
     environment:
@@ -117,8 +148,10 @@ services:
         APP_PATH: apps/cart
     container_name: go-ecommerce-cart-service
     depends_on:
-      - consul
-      - redis
+      consul:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
       - "50053:50053"
     environment:
@@ -135,21 +168,21 @@ services:
         APP_PATH: apps/order
     container_name: go-ecommerce-order-service
     depends_on:
-      - consul
-      - mysql
-      - rabbitmq
+      consul:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     ports:
       - "50054:50054"
     environment:
       - SERVICE_NAME=order-service
       - SERVICE_PORT=50054
       - CONSUL_ADDRESS=consul:8500
-      # [新增] RabbitMQ 连接
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
-      # [新增] 确保数据库连接正确 (适配代码中的 os.Getenv)
       - MYSQL_HOST=mysql
       - MYSQL_PORT=3306
-      # 兼容旧代码读取 DSN
       - MYSQL_DSN=root:root@tcp(mysql:3306)/db_order?charset=utf8mb4&parseTime=True&loc=Local
 
   payment-service:
@@ -160,8 +193,11 @@ services:
         APP_PATH: apps/payment
     container_name: go-ecommerce-payment-service
     depends_on:
-      - consul
-      - order-service
+      consul:
+        condition: service_healthy
+      order-service:
+        # 支付依赖订单服务先启动
+        condition: service_started
     ports:
       - "50055:50055"
     environment:
@@ -175,17 +211,18 @@ services:
       dockerfile: Dockerfile
       args:
         APP_PATH: apps/address
-    container_name: go-ecommerce-address-service-1
+    container_name: go-ecommerce-address-service
     ports:
       - "50056:50056"
     depends_on:
-      - mysql
-      - consul
+      mysql:
+        condition: service_healthy
+      consul:
+        condition: service_healthy
     environment:
       - SERVICE_NAME=address-service
       - SERVICE_PORT=50056
       - CONSUL_ADDRESS=consul:8500
-      # 使用分拆配置，防止 :0 错误
       - MYSQL_HOST=mysql
       - MYSQL_PORT=3306
       - MYSQL_USER=root
@@ -201,12 +238,18 @@ services:
         APP_PATH: apps/gateway
     container_name: go-ecommerce-gateway
     depends_on:
-      - consul
-      - user-service
-      - product-service
-      - cart-service
-      - order-service
-      - address-service
+      consul:
+        condition: service_healthy
+      user-service:
+        condition: service_started
+      product-service:
+        condition: service_started
+      cart-service:
+        condition: service_started
+      order-service:
+        condition: service_started
+      address-service:
+        condition: service_started
     ports:
       - "8080:8080"
     environment:
