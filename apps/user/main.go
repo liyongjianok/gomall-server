@@ -87,6 +87,54 @@ func (s *server) Login(ctx context.Context, req *user.LoginRequest) (*user.Login
 	return &user.LoginResponse{UserId: int64(u.ID), Token: tokenString}, nil
 }
 
+// GetUserInfo 获取用户信息
+func (s *server) GetUserInfo(ctx context.Context, req *user.GetUserInfoRequest) (*user.GetUserInfoResponse, error) {
+	var u model.User
+	if err := s.db.First(&u, req.Id).Error; err != nil {
+		return nil, status.Error(codes.NotFound, "用户不存在")
+	}
+
+	// 如果头像为空，给一个默认头像
+	avatar := u.Avatar
+	if avatar == "" {
+		avatar = "https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png"
+	}
+
+	return &user.GetUserInfoResponse{
+		Id:       int64(u.ID),
+		Username: u.Username,
+		Mobile:   u.Mobile,
+		Nickname: u.Nickname,
+		Avatar:   avatar,
+	}, nil
+}
+
+// UpdateUser 更新用户信息
+func (s *server) UpdateUser(ctx context.Context, req *user.UpdateUserRequest) (*user.UpdateUserResponse, error) {
+	var u model.User
+	if err := s.db.First(&u, req.Id).Error; err != nil {
+		return nil, status.Error(codes.NotFound, "用户不存在")
+	}
+
+	// 更新字段 (只更新非空字段)
+	updates := make(map[string]interface{})
+	if req.Nickname != "" {
+		updates["nickname"] = req.Nickname
+	}
+	if req.Avatar != "" {
+		updates["avatar"] = req.Avatar
+	}
+	if req.Mobile != "" {
+		updates["mobile"] = req.Mobile
+	}
+
+	if err := s.db.Model(&u).Updates(updates).Error; err != nil {
+		return nil, status.Error(codes.Internal, "更新失败")
+	}
+
+	return &user.UpdateUserResponse{Success: true}, nil
+}
+
 func main() {
 	c, err := config.LoadConfig(".")
 	if err != nil {

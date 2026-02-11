@@ -7,6 +7,8 @@ option go_package = "go-ecommerce/proto/user";
 service UserService {
   rpc Register(RegisterRequest) returns (RegisterResponse);
   rpc Login(LoginRequest) returns (LoginResponse);
+  rpc GetUserInfo(GetUserInfoRequest) returns (GetUserInfoResponse);
+  rpc UpdateUser(UpdateUserRequest) returns (UpdateUserResponse);
 }
 
 message RegisterRequest {
@@ -15,7 +17,6 @@ message RegisterRequest {
   string mobile = 3;
 }
 
-// [修改] 之前只有 code/msg，现在改为返回 id
 message RegisterResponse {
   int64 id = 1; 
 }
@@ -28,4 +29,27 @@ message LoginRequest {
 message LoginResponse {
   int64 user_id = 1;
   string token = 2;
+}
+
+message GetUserInfoRequest {
+    int64 id = 1;
+}
+
+message GetUserInfoResponse {
+    int64 id = 1;
+    string username = 2;
+    string mobile = 3;
+    string nickname = 4;
+    string avatar = 5; // 头像URL
+}
+
+message UpdateUserRequest {
+    int64 id = 1;
+    string nickname = 2;
+    string avatar = 3;
+    string mobile = 4;
+}
+
+message UpdateUserResponse {
+    bool success = 1;
 }

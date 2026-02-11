@@ -230,11 +230,42 @@ func main() {
 	// ---------------------------
 	// 受保护接口 (需 Bearer Token)
 	// ---------------------------
-	authed := v1.Group("/")
+	// 🔥🔥🔥 核心修复：把 "/" 改成了 ""，解决了双斜杠 404 问题 🔥🔥🔥
+	authed := v1.Group("")
 	authed.Use(middleware.AuthMiddleware()) // 鉴权中间件
 	{
+		// 获取用户信息
+		authed.GET("/user/info", func(ctx *gin.Context) {
+			userId := ctx.MustGet("userId").(int64)
+			resp, err := userClient.GetUserInfo(ctx, &user.GetUserInfoRequest{Id: userId})
+			if err != nil {
+				response.Error(ctx, http.StatusInternalServerError, err.Error())
+				return
+			}
+			response.Success(ctx, resp)
+		})
+
+		// 更新用户信息
+		authed.POST("/user/update", func(ctx *gin.Context) {
+			var req user.UpdateUserRequest
+			if err := ctx.ShouldBindJSON(&req); err != nil {
+				response.Error(ctx, http.StatusBadRequest, "参数错误")
+				return
+			}
+			// 强制使用当前登录用户ID
+			req.Id = ctx.MustGet("userId").(int64)
+
+			resp, err := userClient.UpdateUser(ctx, &req)
+			if err != nil {
+				response.Error(ctx, http.StatusInternalServerError, err.Error())
+				return
+			}
+			response.Success(ctx, resp)
+		})
+
 		// --- 地址管理 ---
-		authed.POST("/address/add", func(ctx *gin.Context) {
+		// 🔥🔥🔥 核心修复：改为 /address/create 以匹配前端请求 🔥🔥🔥
+		authed.POST("/address/create", func(ctx *gin.Context) {
 			var req address.CreateAddressRequest
 			if err := ctx.ShouldBindJSON(&req); err != nil {
 				response.Error(ctx, http.StatusBadRequest, err.Error())
@@ -319,7 +350,7 @@ func main() {
 			response.Success(ctx, resp)
 		})
 
-		// 🔥🔥🔥 新增：删除购物车商品 🔥🔥🔥
+		// 删除购物车商品
 		authed.POST("/cart/delete", func(ctx *gin.Context) {
 			var req struct {
 				SkuId int64 `json:"sku_id" binding:"required"`
