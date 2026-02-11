@@ -135,6 +135,33 @@ func (s *server) UpdateUser(ctx context.Context, req *user.UpdateUserRequest) (*
 	return &user.UpdateUserResponse{Success: true}, nil
 }
 
+// 🔥 新增：修改密码
+func (s *server) UpdatePassword(ctx context.Context, req *user.UpdatePasswordRequest) (*user.UpdatePasswordResponse, error) {
+	var u model.User
+	if err := s.db.First(&u, req.UserId).Error; err != nil {
+		return nil, status.Error(codes.NotFound, "用户不存在")
+	}
+
+	// 1. 验证旧密码
+	err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(req.OldPassword))
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "旧密码错误")
+	}
+
+	// 2. 加密新密码
+	hashedPwd, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "加密失败")
+	}
+
+	// 3. 更新数据库
+	if err := s.db.Model(&u).Update("password", string(hashedPwd)).Error; err != nil {
+		return nil, status.Error(codes.Internal, "数据库更新失败")
+	}
+
+	return &user.UpdatePasswordResponse{Success: true}, nil
+}
+
 func main() {
 	c, err := config.LoadConfig(".")
 	if err != nil {

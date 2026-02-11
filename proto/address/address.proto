@@ -12,15 +12,17 @@ service AddressService {
   rpc DeleteAddress(DeleteAddressRequest) returns (DeleteAddressResponse);
 }
 
-message Address {
+// AddressInfo
+message AddressInfo {
   int64 id = 1;
   int64 user_id = 2;
-  string name = 3;          // 收货人姓名
-  string mobile = 4;        // 手机号
-  string province = 5;      // 省
-  string city = 6;          // 市
-  string district = 7;      // 区
-  string detail_address = 8;// 详细地址
+  string name = 3;       // 收货人姓名
+  string mobile = 4;     // 手机号
+  string province = 5;   // 省
+  string city = 6;       // 市
+  string district = 7;   // 区
+  string detail_address = 8; // 详细地址
+  bool is_default = 9;   // 新增：是否默认地址
 }
 
 message CreateAddressRequest {
@@ -42,7 +44,7 @@ message ListAddressRequest {
 }
 
 message ListAddressResponse {
-  repeated Address addresses = 1;
+  repeated AddressInfo addresses = 1; // 引用 AddressInfo
 }
 
 message GetAddressRequest {
@@ -50,12 +52,12 @@ message GetAddressRequest {
 }
 
 message GetAddressResponse {
-  Address address = 1;
+  AddressInfo address = 1; // 引用 AddressInfo
 }
 
 message UpdateAddressRequest {
-  int64 address_id = 1;
-  int64 user_id = 2; // 用于鉴权，只能改自己的
+  int64 id = 1;      // 改为 id
+  int64 user_id = 2; // 用于鉴权
   string name = 3;
   string mobile = 4;
   string province = 5;

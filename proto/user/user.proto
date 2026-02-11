@@ -9,6 +9,7 @@ service UserService {
   rpc Login(LoginRequest) returns (LoginResponse);
   rpc GetUserInfo(GetUserInfoRequest) returns (GetUserInfoResponse);
   rpc UpdateUser(UpdateUserRequest) returns (UpdateUserResponse);
+  rpc UpdatePassword(UpdatePasswordRequest) returns (UpdatePasswordResponse);
 }
 
 message RegisterRequest {
@@ -51,5 +52,15 @@ message UpdateUserRequest {
 }
 
 message UpdateUserResponse {
+    bool success = 1;
+}
+
+message UpdatePasswordRequest {
+    int64 user_id = 1;
+    string old_password = 2;
+    string new_password = 3;
+}
+
+message UpdatePasswordResponse {
     bool success = 1;
 }

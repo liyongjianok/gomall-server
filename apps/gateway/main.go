@@ -263,6 +263,30 @@ func main() {
 			response.Success(ctx, resp)
 		})
 
+		// 修改密码
+		authed.POST("/user/password", func(ctx *gin.Context) {
+			var req struct {
+				OldPassword string `json:"old_password" binding:"required"`
+				NewPassword string `json:"new_password" binding:"required"`
+			}
+			if err := ctx.ShouldBindJSON(&req); err != nil {
+				response.Error(ctx, http.StatusBadRequest, err.Error())
+				return
+			}
+
+			userId := ctx.MustGet("userId").(int64)
+			resp, err := userClient.UpdatePassword(ctx.Request.Context(), &user.UpdatePasswordRequest{
+				UserId:      userId,
+				OldPassword: req.OldPassword,
+				NewPassword: req.NewPassword,
+			})
+			if err != nil {
+				response.Error(ctx, http.StatusInternalServerError, err.Error())
+				return
+			}
+			response.Success(ctx, resp)
+		})
+
 		// --- 地址管理 ---
 		// 🔥🔥🔥 核心修复：改为 /address/create 以匹配前端请求 🔥🔥🔥
 		authed.POST("/address/create", func(ctx *gin.Context) {
