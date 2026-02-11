@@ -340,14 +340,19 @@ func main() {
 		// --- 订单管理 ---
 		authed.POST("/order/create", func(ctx *gin.Context) {
 			var req struct {
-				AddressId int64 `json:"address_id" binding:"required"`
+				AddressId int64   `json:"address_id" binding:"required"`
+				SkuIds    []int64 `json:"sku_ids" binding:"required"`
 			}
 			if err := ctx.ShouldBindJSON(&req); err != nil {
-				response.Error(ctx, http.StatusBadRequest, "必须选择收货地址 (address_id)")
+				response.Error(ctx, http.StatusBadRequest, "必须选择收货地址 (address_id)"+err.Error())
 				return
 			}
 			userId := ctx.MustGet("userId").(int64)
-			resp, err := orderClient.CreateOrder(ctx.Request.Context(), &order.CreateOrderRequest{UserId: userId, AddressId: req.AddressId})
+			resp, err := orderClient.CreateOrder(ctx.Request.Context(), &order.CreateOrderRequest{
+				UserId:    userId,
+				AddressId: req.AddressId,
+				SkuIds:    req.SkuIds,
+			})
 			if err != nil {
 				response.Error(ctx, http.StatusInternalServerError, err.Error())
 				return

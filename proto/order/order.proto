@@ -13,7 +13,8 @@ service OrderService {
 
 message CreateOrderRequest {
   int64 user_id = 1;
-  int64 address_id = 2; // [新增] 下单必须选地址
+  int64 address_id = 2; // 下单必须选地址
+  repeated int64 sku_ids = 3; // 只结算勾选的商品
 }
 
 message CreateOrderResponse {

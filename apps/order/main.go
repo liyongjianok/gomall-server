@@ -268,54 +268,94 @@ func (s *server) createSeckillOrder(userId, skuId int64) error {
 	return nil
 }
 
-// CreateOrder 普通下单逻辑 (RPC)
+// CreateOrder 普通下单逻辑 (修复版：支持部分结算)
 func (s *server) CreateOrder(ctx context.Context, req *order.CreateOrderRequest) (*order.CreateOrderResponse, error) {
-	// 0. 校验地址
+	// 0. 校验
 	if req.AddressId <= 0 {
 		return nil, status.Error(codes.InvalidArgument, "必须选择收货地址")
 	}
+	// 🔥 校验必须传入 sku_ids
+	if len(req.SkuIds) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "未选择任何商品")
+	}
+
+	// 1. 获取地址
 	addrResp, err := s.addressClient.GetAddress(ctx, &address.GetAddressRequest{AddressId: req.AddressId})
 	if err != nil {
 		return nil, status.Errorf(codes.NotFound, "地址不存在")
 	}
 	fullAddress := fmt.Sprintf("%s%s%s%s", addrResp.Address.Province, addrResp.Address.City, addrResp.Address.District, addrResp.Address.DetailAddress)
 
-	// 1. 获取购物车
+	// 2. 获取购物车全部商品
 	cartResp, err := s.cartClient.GetCart(ctx, &cart.GetCartRequest{UserId: req.UserId})
 	if err != nil || len(cartResp.Items) == 0 {
 		return nil, status.Error(codes.Unknown, "购物车为空")
 	}
 
+	// 3. 【核心逻辑】筛选勾选的商品
+	// 将 req.SkuIds 转为 map 方便查找
+	selectedMap := make(map[int64]bool)
+	for _, id := range req.SkuIds {
+		selectedMap[id] = true
+	}
+
+	var selectedItems []*cart.CartItem
+	for _, item := range cartResp.Items {
+		if selectedMap[item.SkuId] {
+			selectedItems = append(selectedItems, item)
+		}
+	}
+
+	if len(selectedItems) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "选中的商品无效或不在购物车中")
+	}
+
+	// 4. 开启事务：扣库存 & 算钱 & 创建订单
 	tx := s.db.Begin()
 	var totalAmount float32
 	var orderItems []model.OrderItem
 
-	// 2. 扣库存 & 算钱
-	for _, item := range cartResp.Items {
+	for _, item := range selectedItems {
+		// 查询商品信息
 		prodResp, err := s.productClient.GetProduct(ctx, &product.GetProductRequest{Id: item.SkuId})
 		if err != nil {
 			tx.Rollback()
 			return nil, status.Errorf(codes.NotFound, "商品 SKU %d 不存在", item.SkuId)
 		}
 
+		// 扣减库存
 		_, err = s.productClient.DecreaseStock(ctx, &product.DecreaseStockRequest{SkuId: item.SkuId, Count: item.Quantity})
 		if err != nil {
 			tx.Rollback()
-			return nil, status.Errorf(codes.ResourceExhausted, "库存不足")
+			return nil, status.Errorf(codes.ResourceExhausted, "商品 %s 库存不足", prodResp.Name)
 		}
 
+		// 累加金额
 		totalAmount += prodResp.Price * float32(item.Quantity)
+
+		// 组装订单项
 		orderItems = append(orderItems, model.OrderItem{
-			ProductID: prodResp.Id, SkuID: prodResp.SkuId, ProductName: prodResp.Name, SkuName: prodResp.SkuName,
-			Price: float64(prodResp.Price), Quantity: int(item.Quantity), Picture: prodResp.Picture,
+			ProductID:   prodResp.Id,
+			SkuID:       prodResp.SkuId,
+			ProductName: prodResp.Name,
+			SkuName:     prodResp.SkuName,
+			Price:       float64(prodResp.Price),
+			Quantity:    int(item.Quantity),
+			Picture:     prodResp.Picture,
 		})
 	}
 
-	// 3. 创建订单
+	// 写入订单表
 	orderNo := fmt.Sprintf("%d%d", time.Now().UnixNano(), req.UserId)
 	newOrder := model.Order{
-		OrderNo: orderNo, UserID: req.UserId, TotalAmount: float64(totalAmount), Status: 0,
-		Items: orderItems, ReceiverName: addrResp.Address.Name, ReceiverMobile: addrResp.Address.Mobile, ReceiverAddress: fullAddress,
+		OrderNo:         orderNo,
+		UserID:          req.UserId,
+		TotalAmount:     float64(totalAmount),
+		Status:          0, // 初始状态：未支付
+		Items:           orderItems,
+		ReceiverName:    addrResp.Address.Name,
+		ReceiverMobile:  addrResp.Address.Mobile,
+		ReceiverAddress: fullAddress,
 	}
 
 	if err := tx.Create(&newOrder).Error; err != nil {
@@ -324,9 +364,16 @@ func (s *server) CreateOrder(ctx context.Context, req *order.CreateOrderRequest)
 	}
 	tx.Commit()
 
-	// 4. 清空购物车 & 发送延迟消息
-	s.cartClient.EmptyCart(ctx, &cart.EmptyCartRequest{UserId: req.UserId})
-	s.publishDelayMessage(orderNo)
+	// 5. 【修复逻辑】只从购物车删除已下单的商品 (而不是清空)
+	for _, item := range selectedItems {
+		_, _ = s.cartClient.DeleteItem(ctx, &cart.DeleteItemRequest{
+			UserId: req.UserId,
+			SkuId:  item.SkuId,
+		})
+	}
+
+	// 6. 发送延迟消息 (用于超时自动取消)
+	_ = s.publishDelayMessage(orderNo)
 
 	return &order.CreateOrderResponse{OrderNo: orderNo, TotalAmount: totalAmount}, nil
 }

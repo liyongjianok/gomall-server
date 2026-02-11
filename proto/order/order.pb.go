@@ -24,7 +24,8 @@ const (
 type CreateOrderRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	UserId        int64                  `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	AddressId     int64                  `protobuf:"varint,2,opt,name=address_id,json=addressId,proto3" json:"address_id,omitempty"` // [新增] 下单必须选地址
+	AddressId     int64                  `protobuf:"varint,2,opt,name=address_id,json=addressId,proto3" json:"address_id,omitempty"` // 下单必须选地址
+	SkuIds        []int64                `protobuf:"varint,3,rep,packed,name=sku_ids,json=skuIds,proto3" json:"sku_ids,omitempty"`   // 只结算勾选的商品
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -71,6 +72,13 @@ func (x *CreateOrderRequest) GetAddressId() int64 {
 		return x.AddressId
 	}
 	return 0
+}
+
+func (x *CreateOrderRequest) GetSkuIds() []int64 {
+	if x != nil {
+		return x.SkuIds
+	}
+	return nil
 }
 
 type CreateOrderResponse struct {
@@ -578,11 +586,12 @@ var File_proto_order_order_proto protoreflect.FileDescriptor
 
 const file_proto_order_order_proto_rawDesc = "" +
 	"\n" +
-	"\x17proto/order/order.proto\x12\x05order\"L\n" +
+	"\x17proto/order/order.proto\x12\x05order\"e\n" +
 	"\x12CreateOrderRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12\x1d\n" +
 	"\n" +
-	"address_id\x18\x02 \x01(\x03R\taddressId\"S\n" +
+	"address_id\x18\x02 \x01(\x03R\taddressId\x12\x17\n" +
+	"\asku_ids\x18\x03 \x03(\x03R\x06skuIds\"S\n" +
 	"\x13CreateOrderResponse\x12\x19\n" +
 	"\border_no\x18\x01 \x01(\tR\aorderNo\x12!\n" +
 	"\ftotal_amount\x18\x02 \x01(\x02R\vtotalAmount\",\n" +
