@@ -1,16 +1,13 @@
 /*
- * Go Mall 数据库全量初始化脚本 (Final Version)
- * 修复内容: 
- * 1. 补全 products/skus 表的 stock 字段
- * 2. 修正 orders 表字段为 total_amount
- * 3. 统一 ID 类型为 bigint(20) 解决外键报错
- * 4. 自动生成与商品 1:1 对应的 SKU 数据
+ * Go Mall 数据库全量初始化脚本 (Updated Version)
+ * 更新记录:
+ * 1. users 表新增 avatar 字段 (类型 MEDIUMTEXT)，用于存储 Base64 头像
+ * 2. 包含之前的修复 (stock字段, total_amount, ID类型统一)
  */
 
 SET NAMES utf8mb4;
 
 SET FOREIGN_KEY_CHECKS = 0;
--- 禁用外键检查以顺利删表
 
 -- =======================================================
 -- 1. 用户服务 (db_user)
@@ -28,6 +25,7 @@ CREATE TABLE `users` (
     `password` varchar(255) NOT NULL,
     `mobile` varchar(20) DEFAULT NULL,
     `nickname` varchar(255) DEFAULT NULL,
+    `avatar` MEDIUMTEXT DEFAULT NULL COMMENT '用户头像(Base64)', -- 🔥 新增字段，使用大文本存储图片
     `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
     `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `deleted_at` datetime DEFAULT NULL,
@@ -78,7 +76,7 @@ CREATE DATABASE `db_product` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 
 USE `db_product`;
 
--- 商品主表 (已补全 stock 字段)
+-- 商品主表
 CREATE TABLE `products` (
     `id` bigint(20) NOT NULL AUTO_INCREMENT,
     `name` varchar(255) NOT NULL,
@@ -90,7 +88,7 @@ CREATE TABLE `products` (
     PRIMARY KEY (`id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
--- SKU表 (必须与 Product 1:1 对应，否则详情页报 500)
+-- SKU表
 CREATE TABLE `skus` (
     `id` bigint(20) NOT NULL AUTO_INCREMENT,
     `product_id` bigint(20) NOT NULL,
@@ -105,7 +103,7 @@ CREATE TABLE `skus` (
     KEY `idx_product_id` (`product_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
--- 插入 22 条商品数据
+-- 插入商品数据
 INSERT INTO
     `products` (
         `name`,
@@ -297,8 +295,7 @@ VALUES
         4
     );
 
--- 【关键操作】自动同步 SKU 数据
--- 确保 skus 表里有数据，解决点击商品详情报 500 错误
+-- 自动同步 SKU
 INSERT INTO
     `skus` (
         product_id,
@@ -319,12 +316,12 @@ CREATE DATABASE `db_order` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 
 USE `db_order`;
 
--- 订单表 (字段名已修正为 total_amount，ID 统一为 bigint)
+-- 订单表
 CREATE TABLE `orders` (
     `id` bigint(20) NOT NULL AUTO_INCREMENT,
     `order_no` varchar(64) NOT NULL,
     `user_id` bigint(20) NOT NULL,
-    `total_amount` float(10, 2) NOT NULL DEFAULT 0.00 COMMENT '总金额(原amount)',
+    `total_amount` float(10, 2) NOT NULL DEFAULT 0.00 COMMENT '总金额',
     `status` int(11) DEFAULT '0' COMMENT '0:未支付 1:已支付 2:已取消',
     `address_id` bigint(20) DEFAULT NULL,
     `receiver_name` varchar(64) DEFAULT '',
@@ -338,7 +335,7 @@ CREATE TABLE `orders` (
     KEY `idx_user_id` (`user_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
--- 订单详情表 (外键类型已匹配)
+-- 订单详情表
 CREATE TABLE `order_items` (
     `id` bigint(20) NOT NULL AUTO_INCREMENT,
     `order_id` bigint(20) NOT NULL,
