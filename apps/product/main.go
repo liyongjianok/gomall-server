@@ -175,21 +175,62 @@ func (s *server) listFromMySQL(ctx context.Context, req *product.ListProductsReq
 	return &product.ListProductsResponse{Products: pbProducts, Total: total}, nil
 }
 
-// searchFromES (保持不变)
+// searchFromES 从 ES 搜索并支持高亮
 func (s *server) searchFromES(ctx context.Context, req *product.ListProductsRequest) (*product.ListProductsResponse, error) {
+	// 1. 构建查询：同时搜名称和描述
 	q := elastic.NewMultiMatchQuery(req.Query, "name", "description")
+
+	// 2. 构建高亮：使用 HTML 标签包裹关键词
+	// PreTags/PostTags 定义了高亮的样式，这里直接用红色字体
+	hl := elastic.NewHighlight().
+		Field("name").
+		Field("description").
+		PreTags("<span style='color: #f56c6c; font-weight: bold;'>"). // Element Plus 的 Danger 色
+		PostTags("</span>")
+
 	offset := (req.Page - 1) * req.PageSize
-	searchResult, err := s.esCli.Search().Index(ProductIndex).Query(q).From(int(offset)).Size(int(req.PageSize)).Do(ctx)
+
+	// 3. 执行搜索
+	searchResult, err := s.esCli.Search().
+		Index(ProductIndex).
+		Query(q).
+		Highlight(hl). // 🔥 注入高亮设置
+		From(int(offset)).
+		Size(int(req.PageSize)).
+		Do(ctx)
+
 	if err != nil {
+		log.Printf("[ES Error] Search failed: %v", err)
 		return nil, status.Error(codes.Internal, "ES Error")
 	}
+
 	var pbProducts []*product.Product
 	for _, hit := range searchResult.Hits.Hits {
 		var p Product
+		// 反序列化原始 JSON
 		if err := json.Unmarshal(hit.Source, &p); err == nil {
-			pbProducts = append(pbProducts, &product.Product{Id: p.ID, Name: p.Name, Description: p.Description, Picture: p.Picture, Price: float32(p.Price), CategoryId: p.CategoryID})
+
+			// 🔥🔥🔥 核心修改：如果有高亮结果，覆盖原始文本 🔥🔥🔥
+			if len(hit.Highlight["name"]) > 0 {
+				// 取第一个高亮片段
+				p.Name = hit.Highlight["name"][0]
+			}
+			if len(hit.Highlight["description"]) > 0 {
+				p.Description = hit.Highlight["description"][0]
+			}
+
+			pbProducts = append(pbProducts, &product.Product{
+				Id:          p.ID,
+				Name:        p.Name,        // 这里可能已经是带 HTML 标签的字符串了
+				Description: p.Description, // 同上
+				Picture:     p.Picture,
+				Price:       float32(p.Price),
+				CategoryId:  p.CategoryID,
+			})
 		}
 	}
+
+	log.Printf("[ES] Search query: '%s', Found: %d", req.Query, searchResult.TotalHits())
 	return &product.ListProductsResponse{Products: pbProducts, Total: searchResult.TotalHits()}, nil
 }
 
