@@ -50,12 +50,15 @@ services:
     environment:
       - RABBITMQ_DEFAULT_USER=guest
       - RABBITMQ_DEFAULT_PASS=guest
+      - TZ=Asia/Shanghai # 🔥 [修改] 强制指定时区，解决消息不过期问题
     restart: always
     healthcheck:
       test: [ "CMD", "rabbitmq-diagnostics", "-q", "ping" ]
       interval: 10s
       timeout: 10s
       retries: 5
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
 
   elasticsearch:
     image: elasticsearch:7.17.13
@@ -184,6 +187,7 @@ services:
       - MYSQL_HOST=mysql
       - MYSQL_PORT=3306
       - MYSQL_DSN=root:root@tcp(mysql:3306)/db_order?charset=utf8mb4&parseTime=True&loc=Local
+      - TZ=Asia/Shanghai # 🔥 [修改] 强制指定时区
 
   payment-service:
     build:
