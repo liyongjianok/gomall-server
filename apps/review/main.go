@@ -119,12 +119,24 @@ func (s *server) ListReviews(ctx context.Context, req *review.ListReviewsRequest
 // CheckReviewStatus 检查用户是否已评价某订单的某商品
 func (s *server) CheckReviewStatus(ctx context.Context, req *review.CheckReviewStatusRequest) (*review.CheckReviewStatusResponse, error) {
 	var count int64
-	var rev Review
-	s.db.Model(&Review{}).Where("user_id = ? AND order_no = ? AND sku_id = ?", req.UserId, req.OrderNo, req.SkuId).First(&rev).Count(&count)
+	// 🔥 核心修改：去掉 .First(&rev)，直接用 Count
+	// GORM 的 .First() 如果找不到记录会返回 error，导致整个请求报错 500
+	// 而 .Count() 找不到记录只会返回 0，不会报错
+	err := s.db.Model(&Review{}).
+		Where("user_id = ? AND order_no = ? AND sku_id = ?", req.UserId, req.OrderNo, req.SkuId).
+		Count(&count).Error
 
+	if err != nil {
+		// 如果是真正的数据库错误（比如连接断开），才返回 error
+		log.Printf("查询评价状态失败: %v", err)
+		return nil, status.Error(codes.Internal, "查询数据库失败")
+	}
+
+	// 如果 count > 0，说明找到了记录，即“已评价”
+	// 如果 count == 0，说明没找到，即“未评价”
 	return &review.CheckReviewStatusResponse{
 		HasReviewed: count > 0,
-		ReviewId:    rev.ID,
+		ReviewId:    0, // 简化处理，只返回是否评价即可
 	}, nil
 }
 
@@ -152,6 +164,9 @@ func main() {
 	if v := os.Getenv("CONSUL_ADDRESS"); v != "" {
 		c.Consul.Address = v
 	}
+
+	// 强制指定数据库名为 db_review
+	c.Mysql.DbName = "db_review"
 
 	// 初始化数据库并自动迁移表结构
 	db, err := database.InitMySQL(c.Mysql)

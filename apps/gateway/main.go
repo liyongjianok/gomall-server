@@ -11,7 +11,7 @@ import (
 	"go-ecommerce/apps/gateway/middleware"
 	"go-ecommerce/pkg/config"
 	"go-ecommerce/pkg/response"
-	"go-ecommerce/pkg/tracer" // [自研] 链路追踪初始化包
+	"go-ecommerce/pkg/tracer"
 	"go-ecommerce/proto/address"
 	"go-ecommerce/proto/cart"
 	"go-ecommerce/proto/order"
@@ -33,7 +33,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/status" // 用于错误信息转换
+	"google.golang.org/grpc/status"
 )
 
 // Sentinel 限流资源名常量
@@ -485,7 +485,6 @@ func main() {
 			}
 			defer e.Exit()
 
-			// 2. 正常业务逻辑
 			var req struct {
 				SkuId int64 `json:"sku_id" binding:"required"`
 			}
@@ -543,11 +542,19 @@ func main() {
 					return
 				}
 
+				// 拿着 SkuId 去商品服务反查真实的 ProductId
+				productResp, err := productClient.GetProduct(c.Request.Context(), &product.GetProductRequest{Id: req.SkuId})
+				if err == nil && productResp != nil {
+					req.ProductId = productResp.Id // 获取真正的 product_id
+				} else {
+					req.ProductId = req.SkuId // 查不到就降级
+				}
+
 				resp, err := reviewClient.CreateReview(c.Request.Context(), &review.CreateReviewRequest{
 					UserId:       userId,
 					OrderNo:      req.OrderNo,
 					SkuId:        req.SkuId,
-					ProductId:    req.ProductId,
+					ProductId:    req.ProductId, // 使用反查回来的真实ID
 					Content:      req.Content,
 					Star:         req.Star,
 					Images:       req.Images,

@@ -249,6 +249,7 @@ services:
       - MYSQL_PORT=3306
       - CONSUL_ADDRESS=consul:8500
       - JAEGER_HOST=jaeger:4318
+      - MYSQL_DSN=root:root@tcp(mysql:3306)/db_review?charset=utf8mb4&parseTime=True&loc=Local
     depends_on:
       mysql:
         condition: service_healthy

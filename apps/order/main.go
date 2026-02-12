@@ -387,11 +387,25 @@ func (s *server) ListOrders(ctx context.Context, req *order.ListOrdersRequest) (
 		var items []*order.OrderItem
 		for _, item := range o.Items {
 			items = append(items, &order.OrderItem{
-				ProductName: item.ProductName, SkuName: item.SkuName, Price: float32(item.Price), Quantity: int32(item.Quantity), Picture: item.Picture,
+				// 🔥 这里必须赋值！否则前端收到的就是 0
+				SkuId:       int64(item.SkuID),
+				ProductId:   int64(item.ProductID),
+				ProductName: item.ProductName,
+				SkuName:     item.SkuName,
+				Price:       float32(item.Price),
+				Quantity:    int32(item.Quantity),
+				Picture:     item.Picture,
 			})
 		}
 		respOrders = append(respOrders, &order.OrderInfo{
-			OrderNo: o.OrderNo, TotalAmount: float32(o.TotalAmount), Status: int32(o.Status), CreatedAt: o.CreatedAt.Format("2006-01-02 15:04:05"), Items: items, ReceiverName: o.ReceiverName, ReceiverMobile: o.ReceiverMobile, ReceiverAddress: o.ReceiverAddress,
+			OrderNo:         o.OrderNo,
+			TotalAmount:     float32(o.TotalAmount),
+			Status:          int32(o.Status),
+			CreatedAt:       o.CreatedAt.Format("2006-01-02 15:04:05"),
+			Items:           items,
+			ReceiverName:    o.ReceiverName,
+			ReceiverMobile:  o.ReceiverMobile,
+			ReceiverAddress: o.ReceiverAddress,
 		})
 	}
 	return &order.ListOrdersResponse{Orders: respOrders}, nil

@@ -9,12 +9,13 @@ service OrderService {
   rpc ListOrders(ListOrdersRequest) returns (ListOrdersResponse);
   rpc MarkOrderPaid(MarkOrderPaidRequest) returns (MarkOrderPaidResponse);
   rpc CancelOrder(CancelOrderRequest) returns (CancelOrderResponse);
+  rpc UpdateOrderStatus(UpdateOrderStatusRequest) returns (UpdateOrderStatusResponse);
 }
 
 message CreateOrderRequest {
   int64 user_id = 1;
-  int64 address_id = 2; // 下单必须选地址
-  repeated int64 sku_ids = 3; // 只结算勾选的商品
+  int64 address_id = 2;
+  repeated int64 sku_ids = 3;
 }
 
 message CreateOrderResponse {
@@ -36,8 +37,6 @@ message OrderInfo {
   int32 status = 3;
   string created_at = 4;
   repeated OrderItem items = 5;
-  
-  // [新增] 地址快照信息
   string receiver_name = 6;
   string receiver_mobile = 7;
   string receiver_address = 8;
@@ -49,6 +48,8 @@ message OrderItem {
   float price = 3;
   int32 quantity = 4;
   string picture = 5;
+  int64 sku_id = 6;
+  int64 product_id = 7;
 }
 
 message MarkOrderPaidRequest {
@@ -65,5 +66,14 @@ message CancelOrderRequest {
 }
 
 message CancelOrderResponse {
+  bool success = 1;
+}
+
+message UpdateOrderStatusRequest {
+  string order_no = 1;
+  int32 status = 2;
+}
+
+message UpdateOrderStatusResponse {
   bool success = 1;
 }
