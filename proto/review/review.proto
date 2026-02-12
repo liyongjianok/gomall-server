@@ -1,0 +1,66 @@
+syntax = "proto3";
+
+package review;
+
+option go_package = "go-ecommerce/proto/review";
+
+service ReviewService {
+  // 创建评价
+  rpc CreateReview(CreateReviewRequest) returns (CreateReviewResponse);
+  // 获取商品评价列表
+  rpc ListReviews(ListReviewsRequest) returns (ListReviewsResponse);
+  // 获取商品是否有当前用户的评价 (用于前端判断显示"已评价")
+  rpc CheckReviewStatus(CheckReviewStatusRequest) returns (CheckReviewStatusResponse);
+}
+
+message ReviewInfo {
+  int64 id = 1;
+  int64 user_id = 2;
+  string user_nickname = 3; // 冗余昵称，方便显示
+  string user_avatar = 4;   // 冗余头像
+  string content = 5;
+  int32 star = 6;
+  repeated string images = 7;
+  string created_at = 8;
+  string sku_name = 9; // 购买时的规格名
+}
+
+message CreateReviewRequest {
+  int64 user_id = 1;
+  string order_no = 2;
+  int64 sku_id = 3;
+  int64 product_id = 4;
+  string content = 5;
+  int32 star = 6;
+  repeated string images = 7; // 图片链接列表
+  string user_nickname = 8;
+  string user_avatar = 9;
+  string sku_name = 10;
+}
+
+message CreateReviewResponse {
+  int64 review_id = 1;
+}
+
+message ListReviewsRequest {
+  int64 product_id = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+}
+
+message ListReviewsResponse {
+  repeated ReviewInfo reviews = 1;
+  int64 total = 2;
+  float average_star = 3; // 该商品的平均分
+}
+
+message CheckReviewStatusRequest {
+  int64 user_id = 1;
+  string order_no = 2;
+  int64 sku_id = 3;
+}
+
+message CheckReviewStatusResponse {
+  bool has_reviewed = 1;
+  int64 review_id = 2;
+}

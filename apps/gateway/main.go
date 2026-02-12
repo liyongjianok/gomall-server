@@ -17,6 +17,7 @@ import (
 	"go-ecommerce/proto/order"
 	"go-ecommerce/proto/payment"
 	"go-ecommerce/proto/product"
+	"go-ecommerce/proto/review"
 	"go-ecommerce/proto/user"
 
 	sentinel "github.com/alibaba/sentinel-golang/api"
@@ -32,6 +33,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status" // 用于错误信息转换
 )
 
 // Sentinel 限流资源名常量
@@ -143,6 +145,13 @@ func main() {
 	}
 	addressClient := address.NewAddressServiceClient(addrConn)
 
+	// 连接 Review Service
+	reviewConn, err := grpc.Dial(fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "review-service"), connOpts...)
+	if err != nil {
+		log.Fatalf("连接评价服务失败: %v", err)
+	}
+	reviewClient := review.NewReviewServiceClient(reviewConn)
+
 	// ==========================================
 	// 5. 启动 HTTP 服务 (Gin)
 	// ==========================================
@@ -225,12 +234,35 @@ func main() {
 			}
 			response.Success(ctx, resp)
 		})
+
+		// 获取商品评价列表
+		v1.GET("/review/list", func(c *gin.Context) {
+			productId := c.Query("product_id")
+			if productId == "" {
+				response.Error(c, http.StatusBadRequest, "product_id 不能为空")
+				return
+			}
+			page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+			pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
+			pid, _ := strconv.ParseInt(productId, 10, 64)
+
+			resp, err := reviewClient.ListReviews(c.Request.Context(), &review.ListReviewsRequest{
+				ProductId: pid,
+				Page:      int32(page),
+				PageSize:  int32(pageSize),
+			})
+			if err != nil {
+				response.Error(c, http.StatusInternalServerError, "查询评价失败")
+				return
+			}
+			response.Success(c, resp)
+		})
 	}
 
 	// ---------------------------
 	// 受保护接口 (需 Bearer Token)
 	// ---------------------------
-	// 🔥🔥🔥 核心修复：把 "/" 改成了 ""，解决了双斜杠 404 问题 🔥🔥🔥
+	// 把 "/" 改成了 ""，解决了双斜杠 404 问题
 	authed := v1.Group("")
 	authed.Use(middleware.AuthMiddleware()) // 鉴权中间件
 	{
@@ -288,7 +320,7 @@ func main() {
 		})
 
 		// --- 地址管理 ---
-		// 🔥🔥🔥 核心修复：改为 /address/create 以匹配前端请求 🔥🔥🔥
+		// 改为 /address/create 以匹配前端请求
 		authed.POST("/address/create", func(ctx *gin.Context) {
 			var req address.CreateAddressRequest
 			if err := ctx.ShouldBindJSON(&req); err != nil {
@@ -488,6 +520,67 @@ func main() {
 			}
 			response.Success(ctx, resp)
 		})
+
+		// 受保护的评价接口
+		reviewGroup := authed.Group("/review")
+		{
+			// 新增评价 (需登录)
+			reviewGroup.POST("/add", func(c *gin.Context) {
+				userId := c.MustGet("userId").(int64)
+				var req struct {
+					OrderNo      string   `json:"order_no"`
+					SkuId        int64    `json:"sku_id"`
+					ProductId    int64    `json:"product_id"`
+					Content      string   `json:"content"`
+					Star         int32    `json:"star"`
+					Images       []string `json:"images"`
+					UserNickname string   `json:"user_nickname"`
+					UserAvatar   string   `json:"user_avatar"`
+					SkuName      string   `json:"sku_name"`
+				}
+				if err := c.ShouldBindJSON(&req); err != nil {
+					response.Error(c, http.StatusBadRequest, "参数错误")
+					return
+				}
+
+				resp, err := reviewClient.CreateReview(c.Request.Context(), &review.CreateReviewRequest{
+					UserId:       userId,
+					OrderNo:      req.OrderNo,
+					SkuId:        req.SkuId,
+					ProductId:    req.ProductId,
+					Content:      req.Content,
+					Star:         req.Star,
+					Images:       req.Images,
+					UserNickname: req.UserNickname,
+					UserAvatar:   req.UserAvatar,
+					SkuName:      req.SkuName,
+				})
+				if err != nil {
+					response.Error(c, http.StatusInternalServerError, status.Convert(err).Message())
+					return
+				}
+				response.Success(c, resp)
+			})
+
+			// 检查是否已评价 (需登录)
+			reviewGroup.GET("/status", func(c *gin.Context) {
+				userId := c.MustGet("userId").(int64)
+				orderNo := c.Query("order_no")
+				skuIdStr := c.Query("sku_id")
+				skuId, _ := strconv.ParseInt(skuIdStr, 10, 64)
+
+				resp, err := reviewClient.CheckReviewStatus(c.Request.Context(), &review.CheckReviewStatusRequest{
+					UserId:  userId,
+					OrderNo: orderNo,
+					SkuId:   skuId,
+				})
+				if err != nil {
+					response.Error(c, http.StatusInternalServerError, "查询状态失败")
+					return
+				}
+				response.Success(c, resp)
+			})
+		}
 	}
 
 	addr := fmt.Sprintf(":%d", c.Service.Port)

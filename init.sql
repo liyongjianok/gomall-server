@@ -370,3 +370,30 @@ CREATE TABLE `cart_items` (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
 SET FOREIGN_KEY_CHECKS = 1;
+
+-- =======================================================
+-- 5. 评价服务 (db_review)
+-- =======================================================
+CREATE DATABASE IF NOT EXISTS `db_review` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+
+USE `db_review`;
+
+CREATE TABLE `reviews` (
+    `id` bigint(20) NOT NULL AUTO_INCREMENT,
+    `user_id` bigint(20) NOT NULL COMMENT '用户ID',
+    `order_no` varchar(64) NOT NULL COMMENT '订单号',
+    `sku_id` bigint(20) NOT NULL COMMENT '商品SKU ID',
+    `product_id` bigint(20) NOT NULL COMMENT '商品SPU ID (冗余字段方便查询)',
+    `content` text COMMENT '评价内容',
+    `images` json DEFAULT NULL COMMENT '评价图片(JSON数组)',
+    `star` tinyint(1) NOT NULL DEFAULT 5 COMMENT '评分 1-5',
+    `is_anonymous` tinyint(1) DEFAULT 0 COMMENT '是否匿名',
+    `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `deleted_at` datetime DEFAULT NULL,
+    PRIMARY KEY (`id`),
+    -- 核心约束：一个订单里的同一个商品，只能评价一次
+    UNIQUE KEY `uni_order_sku` (`order_no`, `sku_id`),
+    -- 索引：查询某个商品的评价列表
+    KEY `idx_product_id` (`product_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;

@@ -1,0 +1,11 @@
+service:
+  name: "review-service"
+  port: 50057
+mysql:
+  host: "127.0.0.1"
+  port: 3306
+  user: "root"
+  password: "root"
+  database: "db_review"
+consul:
+  address: "127.0.0.1:8500"

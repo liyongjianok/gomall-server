@@ -50,7 +50,7 @@ services:
     environment:
       - RABBITMQ_DEFAULT_USER=guest
       - RABBITMQ_DEFAULT_PASS=guest
-      - TZ=Asia/Shanghai # 🔥 [修改] 强制指定时区，解决消息不过期问题
+      - TZ=Asia/Shanghai
     restart: always
     healthcheck:
       test: [ "CMD", "rabbitmq-diagnostics", "-q", "ping" ]
@@ -86,7 +86,7 @@ services:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
     depends_on:
       elasticsearch:
-        condition: service_healthy # 等 ES 健康才启动
+        condition: service_healthy
     restart: always
 
   jaeger:
@@ -187,7 +187,7 @@ services:
       - MYSQL_HOST=mysql
       - MYSQL_PORT=3306
       - MYSQL_DSN=root:root@tcp(mysql:3306)/db_order?charset=utf8mb4&parseTime=True&loc=Local
-      - TZ=Asia/Shanghai # 🔥 [修改] 强制指定时区
+      - TZ=Asia/Shanghai
 
   payment-service:
     build:
@@ -200,7 +200,6 @@ services:
       consul:
         condition: service_healthy
       order-service:
-        # 支付依赖订单服务先启动
         condition: service_started
     ports:
       - "50055:50055"
@@ -234,6 +233,28 @@ services:
       - MYSQL_DBNAME=db_user
     restart: always
 
+  review-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_PATH: apps/review
+    container_name: go-ecommerce-review-service
+    ports:
+      - "50057:50057"
+    environment:
+      - SERVICE_NAME=review-service
+      - SERVICE_PORT=50057
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - CONSUL_ADDRESS=consul:8500
+      - JAEGER_HOST=jaeger:4318
+    depends_on:
+      mysql:
+        condition: service_healthy
+      consul:
+        condition: service_healthy
+
   gateway:
     build:
       context: .
@@ -253,6 +274,9 @@ services:
       order-service:
         condition: service_started
       address-service:
+        condition: service_started
+      review-service:
+        # 🔥 新增：网关依赖于评价服务先启动
         condition: service_started
     ports:
       - "8080:8080"
