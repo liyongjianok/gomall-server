@@ -209,12 +209,12 @@ func (s *server) startConsumer() {
 	}()
 }
 
-// 🔥 核心逻辑：创建秒杀订单 (保证幂等性)
+// 创建秒杀订单 (保证幂等性)
 func (s *server) createSeckillOrder(userId, skuId int64) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// 1. 🔥 幂等性检查：生成唯一订单号
+	// 幂等性检查：生成唯一订单号
 	// 规则：SK-{用户ID}-{商品ID}
 	// 这样同一个用户对同一个商品只能生成一个订单号，数据库的 UNIQUE KEY 会阻止重复插入
 	orderNo := fmt.Sprintf("SK-%d-%d", userId, skuId)
