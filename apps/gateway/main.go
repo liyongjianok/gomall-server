@@ -332,7 +332,6 @@ func main() {
 		})
 
 		// --- 地址管理 ---
-		// 改为 /address/create 以匹配前端请求
 		authed.POST("/address/create", func(ctx *gin.Context) {
 			var req address.CreateAddressRequest
 			if err := ctx.ShouldBindJSON(&req); err != nil {
@@ -382,6 +381,29 @@ func main() {
 				return
 			}
 			resp, err := addressClient.DeleteAddress(ctx.Request.Context(), &address.DeleteAddressRequest{AddressId: req.AddressId, UserId: ctx.MustGet("userId").(int64)})
+			if err != nil {
+				response.Error(ctx, http.StatusInternalServerError, err.Error())
+				return
+			}
+			response.Success(ctx, resp)
+		})
+
+		// 设置默认地址
+		authed.POST("/address/set_default", func(ctx *gin.Context) {
+			var req struct {
+				AddressId int64 `json:"address_id" binding:"required"`
+			}
+			if err := ctx.ShouldBindJSON(&req); err != nil {
+				response.Error(ctx, http.StatusBadRequest, "参数错误")
+				return
+			}
+
+			userId := ctx.MustGet("userId").(int64)
+			resp, err := addressClient.SetDefaultAddress(ctx.Request.Context(), &address.SetDefaultAddressRequest{
+				AddressId: req.AddressId,
+				UserId:    userId,
+			})
+
 			if err != nil {
 				response.Error(ctx, http.StatusInternalServerError, err.Error())
 				return
