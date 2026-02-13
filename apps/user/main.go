@@ -18,7 +18,7 @@ import (
 	"go-ecommerce/proto/user"
 
 	"github.com/golang-jwt/jwt/v5"
-	"golang.org/x/crypto/bcrypt" // [恢复] 加密库
+	"golang.org/x/crypto/bcrypt"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/reflection"
@@ -26,7 +26,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// [关键] 必须与 Gateway 保持一致
+// 必须与 Gateway 保持一致
 var jwtSecret = []byte("my_secret_key")
 
 type server struct {
@@ -41,7 +41,7 @@ func (s *server) Register(ctx context.Context, req *user.RegisterRequest) (*user
 		return nil, status.Error(codes.AlreadyExists, "Username already exists")
 	}
 
-	// [修复] 密码加密存储
+	// 密码加密存储
 	hashedPwd, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "Failed to encrypt password")
@@ -49,8 +49,9 @@ func (s *server) Register(ctx context.Context, req *user.RegisterRequest) (*user
 
 	u := model.User{
 		Username: req.Username,
-		Password: string(hashedPwd), // 存入加密后的哈希值
+		Password: string(hashedPwd),
 		Mobile:   req.Mobile,
+		Nickname: req.Nickname,
 	}
 
 	if err := s.db.Create(&u).Error; err != nil {
@@ -111,31 +112,46 @@ func (s *server) GetUserInfo(ctx context.Context, req *user.GetUserInfoRequest) 
 
 // UpdateUser 更新用户信息
 func (s *server) UpdateUser(ctx context.Context, req *user.UpdateUserRequest) (*user.UpdateUserResponse, error) {
+	log.Printf("[User] 收到资料更新请求: UserID=%d", req.Id)
 	var u model.User
 	if err := s.db.First(&u, req.Id).Error; err != nil {
 		return nil, status.Error(codes.NotFound, "用户不存在")
 	}
 
 	// 更新字段 (只更新非空字段)
-	updates := make(map[string]interface{})
+	updateData := make(map[string]interface{})
 	if req.Nickname != "" {
-		updates["nickname"] = req.Nickname
+		updateData["nickname"] = req.Nickname
 	}
 	if req.Avatar != "" {
-		updates["avatar"] = req.Avatar
+		updateData["avatar"] = req.Avatar
 	}
 	if req.Mobile != "" {
-		updates["mobile"] = req.Mobile
+		updateData["mobile"] = req.Mobile
 	}
 
-	if err := s.db.Model(&u).Updates(updates).Error; err != nil {
-		return nil, status.Error(codes.Internal, "更新失败")
+	if len(updateData) == 0 {
+		return &user.UpdateUserResponse{Success: true}, nil
 	}
 
+	// 2. 执行数据库更新
+	// 使用 Table("users") 或 Model(&model.User{})
+	result := s.db.Table("users").Where("id = ? AND deleted_at IS NULL", req.Id).Updates(updateData)
+
+	if result.Error != nil {
+		log.Printf("[Error] 数据库更新失败: %v", result.Error)
+		return nil, status.Errorf(codes.Internal, "更新数据库失败: %v", result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		return nil, status.Error(codes.NotFound, "未找到该用户")
+	}
+
+	log.Printf("[User] 资料更新成功")
 	return &user.UpdateUserResponse{Success: true}, nil
 }
 
-// 🔥 新增：修改密码
+// 修改密码
 func (s *server) UpdatePassword(ctx context.Context, req *user.UpdatePasswordRequest) (*user.UpdatePasswordResponse, error) {
 	var u model.User
 	if err := s.db.First(&u, req.UserId).Error; err != nil {

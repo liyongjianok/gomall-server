@@ -7,8 +7,8 @@ type User struct {
 	Username   string `gorm:"type:varchar(100);unique;not null"`
 	Password   string `gorm:"type:varchar(255);not null"`
 	Mobile     string `gorm:"type:varchar(20)"`
-	Nickname   string `gorm:"type:varchar(50)"`  // 昵称
-	Avatar     string `gorm:"type:varchar(255)"` // 头像
+	Nickname   string `gorm:"type:varchar(255)"` // 昵称
+	Avatar     string `gorm:"type:mediumtext"`   // 头像
 }
 
 // TableName 指定表名

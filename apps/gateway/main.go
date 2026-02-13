@@ -187,16 +187,28 @@ func main() {
 
 		// 用户注册
 		v1.POST("/user/register", func(ctx *gin.Context) {
+			// 1. 在结构体中增加 Nickname 字段
 			var req struct {
 				Username string `json:"username" binding:"required"`
 				Password string `json:"password" binding:"required"`
 				Mobile   string `json:"mobile"`
+				Nickname string `json:"nickname"` // 接收前端传来的昵称
 			}
+
 			if err := ctx.ShouldBindJSON(&req); err != nil {
 				response.Error(ctx, http.StatusBadRequest, err.Error())
 				return
 			}
-			resp, err := userClient.Register(ctx.Request.Context(), &user.RegisterRequest{Username: req.Username, Password: req.Password, Mobile: req.Mobile})
+
+			// 2. 在调用 gRPC 客户端时，将 Nickname 传递给下游的 user-service
+			// 注意：请确保你的 user.RegisterRequest 定义中包含 Nickname 字段（通常在 .proto 文件中定义）
+			resp, err := userClient.Register(ctx.Request.Context(), &user.RegisterRequest{
+				Username: req.Username,
+				Password: req.Password,
+				Mobile:   req.Mobile,
+				Nickname: req.Nickname, // 透传给 user 核心服务
+			})
+
 			if err != nil {
 				response.Error(ctx, http.StatusInternalServerError, err.Error())
 				return
