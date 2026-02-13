@@ -418,6 +418,94 @@ func (x *ToggleStatusResponse) GetSuccess() bool {
 	return false
 }
 
+type DeleteUserRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        int64                  `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteUserRequest) Reset() {
+	*x = DeleteUserRequest{}
+	mi := &file_proto_admin_admin_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteUserRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteUserRequest) ProtoMessage() {}
+
+func (x *DeleteUserRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_admin_admin_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteUserRequest.ProtoReflect.Descriptor instead.
+func (*DeleteUserRequest) Descriptor() ([]byte, []int) {
+	return file_proto_admin_admin_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *DeleteUserRequest) GetUserId() int64 {
+	if x != nil {
+		return x.UserId
+	}
+	return 0
+}
+
+type DeleteUserResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteUserResponse) Reset() {
+	*x = DeleteUserResponse{}
+	mi := &file_proto_admin_admin_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteUserResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteUserResponse) ProtoMessage() {}
+
+func (x *DeleteUserResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_admin_admin_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteUserResponse.ProtoReflect.Descriptor instead.
+func (*DeleteUserResponse) Descriptor() ([]byte, []int) {
+	return file_proto_admin_admin_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *DeleteUserResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
 type ListAllProductsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Page          int32                  `protobuf:"varint,1,opt,name=page,proto3" json:"page,omitempty"`
@@ -428,7 +516,7 @@ type ListAllProductsRequest struct {
 
 func (x *ListAllProductsRequest) Reset() {
 	*x = ListAllProductsRequest{}
-	mi := &file_proto_admin_admin_proto_msgTypes[7]
+	mi := &file_proto_admin_admin_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -440,7 +528,7 @@ func (x *ListAllProductsRequest) String() string {
 func (*ListAllProductsRequest) ProtoMessage() {}
 
 func (x *ListAllProductsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_admin_admin_proto_msgTypes[7]
+	mi := &file_proto_admin_admin_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -453,7 +541,7 @@ func (x *ListAllProductsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAllProductsRequest.ProtoReflect.Descriptor instead.
 func (*ListAllProductsRequest) Descriptor() ([]byte, []int) {
-	return file_proto_admin_admin_proto_rawDescGZIP(), []int{7}
+	return file_proto_admin_admin_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ListAllProductsRequest) GetPage() int32 {
@@ -482,7 +570,7 @@ type AdminProductInfo struct {
 
 func (x *AdminProductInfo) Reset() {
 	*x = AdminProductInfo{}
-	mi := &file_proto_admin_admin_proto_msgTypes[8]
+	mi := &file_proto_admin_admin_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -494,7 +582,7 @@ func (x *AdminProductInfo) String() string {
 func (*AdminProductInfo) ProtoMessage() {}
 
 func (x *AdminProductInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_admin_admin_proto_msgTypes[8]
+	mi := &file_proto_admin_admin_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -507,7 +595,7 @@ func (x *AdminProductInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminProductInfo.ProtoReflect.Descriptor instead.
 func (*AdminProductInfo) Descriptor() ([]byte, []int) {
-	return file_proto_admin_admin_proto_rawDescGZIP(), []int{8}
+	return file_proto_admin_admin_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *AdminProductInfo) GetId() int64 {
@@ -548,7 +636,7 @@ type ListAllProductsResponse struct {
 
 func (x *ListAllProductsResponse) Reset() {
 	*x = ListAllProductsResponse{}
-	mi := &file_proto_admin_admin_proto_msgTypes[9]
+	mi := &file_proto_admin_admin_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -560,7 +648,7 @@ func (x *ListAllProductsResponse) String() string {
 func (*ListAllProductsResponse) ProtoMessage() {}
 
 func (x *ListAllProductsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_admin_admin_proto_msgTypes[9]
+	mi := &file_proto_admin_admin_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -573,7 +661,7 @@ func (x *ListAllProductsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAllProductsResponse.ProtoReflect.Descriptor instead.
 func (*ListAllProductsResponse) Descriptor() ([]byte, []int) {
-	return file_proto_admin_admin_proto_rawDescGZIP(), []int{9}
+	return file_proto_admin_admin_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ListAllProductsResponse) GetProducts() []*AdminProductInfo {
@@ -601,7 +689,7 @@ type UpdateProductRequest struct {
 
 func (x *UpdateProductRequest) Reset() {
 	*x = UpdateProductRequest{}
-	mi := &file_proto_admin_admin_proto_msgTypes[10]
+	mi := &file_proto_admin_admin_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -613,7 +701,7 @@ func (x *UpdateProductRequest) String() string {
 func (*UpdateProductRequest) ProtoMessage() {}
 
 func (x *UpdateProductRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_admin_admin_proto_msgTypes[10]
+	mi := &file_proto_admin_admin_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -626,7 +714,7 @@ func (x *UpdateProductRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateProductRequest.ProtoReflect.Descriptor instead.
 func (*UpdateProductRequest) Descriptor() ([]byte, []int) {
-	return file_proto_admin_admin_proto_rawDescGZIP(), []int{10}
+	return file_proto_admin_admin_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *UpdateProductRequest) GetId() int64 {
@@ -659,7 +747,7 @@ type UpdateProductResponse struct {
 
 func (x *UpdateProductResponse) Reset() {
 	*x = UpdateProductResponse{}
-	mi := &file_proto_admin_admin_proto_msgTypes[11]
+	mi := &file_proto_admin_admin_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -671,7 +759,7 @@ func (x *UpdateProductResponse) String() string {
 func (*UpdateProductResponse) ProtoMessage() {}
 
 func (x *UpdateProductResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_admin_admin_proto_msgTypes[11]
+	mi := &file_proto_admin_admin_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -684,7 +772,7 @@ func (x *UpdateProductResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateProductResponse.ProtoReflect.Descriptor instead.
 func (*UpdateProductResponse) Descriptor() ([]byte, []int) {
-	return file_proto_admin_admin_proto_rawDescGZIP(), []int{11}
+	return file_proto_admin_admin_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *UpdateProductResponse) GetSuccess() bool {
@@ -703,7 +791,7 @@ type ShipOrderRequest struct {
 
 func (x *ShipOrderRequest) Reset() {
 	*x = ShipOrderRequest{}
-	mi := &file_proto_admin_admin_proto_msgTypes[12]
+	mi := &file_proto_admin_admin_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -715,7 +803,7 @@ func (x *ShipOrderRequest) String() string {
 func (*ShipOrderRequest) ProtoMessage() {}
 
 func (x *ShipOrderRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_admin_admin_proto_msgTypes[12]
+	mi := &file_proto_admin_admin_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -728,7 +816,7 @@ func (x *ShipOrderRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShipOrderRequest.ProtoReflect.Descriptor instead.
 func (*ShipOrderRequest) Descriptor() ([]byte, []int) {
-	return file_proto_admin_admin_proto_rawDescGZIP(), []int{12}
+	return file_proto_admin_admin_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ShipOrderRequest) GetOrderNo() string {
@@ -747,7 +835,7 @@ type ShipOrderResponse struct {
 
 func (x *ShipOrderResponse) Reset() {
 	*x = ShipOrderResponse{}
-	mi := &file_proto_admin_admin_proto_msgTypes[13]
+	mi := &file_proto_admin_admin_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -759,7 +847,7 @@ func (x *ShipOrderResponse) String() string {
 func (*ShipOrderResponse) ProtoMessage() {}
 
 func (x *ShipOrderResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_admin_admin_proto_msgTypes[13]
+	mi := &file_proto_admin_admin_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -772,7 +860,7 @@ func (x *ShipOrderResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShipOrderResponse.ProtoReflect.Descriptor instead.
 func (*ShipOrderResponse) Descriptor() ([]byte, []int) {
-	return file_proto_admin_admin_proto_rawDescGZIP(), []int{13}
+	return file_proto_admin_admin_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ShipOrderResponse) GetSuccess() bool {
@@ -816,6 +904,10 @@ const file_proto_admin_admin_proto_rawDesc = "" +
 	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12\x1a\n" +
 	"\bdisabled\x18\x02 \x01(\bR\bdisabled\"0\n" +
 	"\x14ToggleStatusResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\",\n" +
+	"\x11DeleteUserRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\x03R\x06userId\".\n" +
+	"\x12DeleteUserResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\"I\n" +
 	"\x16ListAllProductsRequest\x12\x12\n" +
 	"\x04page\x18\x01 \x01(\x05R\x04page\x12\x1b\n" +
@@ -837,11 +929,13 @@ const file_proto_admin_admin_proto_rawDesc = "" +
 	"\x10ShipOrderRequest\x12\x19\n" +
 	"\border_no\x18\x01 \x01(\tR\aorderNo\"-\n" +
 	"\x11ShipOrderResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess2\xb9\x03\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess2\xfc\x03\n" +
 	"\fAdminService\x12>\n" +
 	"\x11GetDashboardStats\x12\x13.admin.StatsRequest\x1a\x14.admin.StatsResponse\x12>\n" +
 	"\tListUsers\x12\x17.admin.ListUsersRequest\x1a\x18.admin.ListUsersResponse\x12K\n" +
-	"\x10ToggleUserStatus\x12\x1a.admin.ToggleStatusRequest\x1a\x1b.admin.ToggleStatusResponse\x12P\n" +
+	"\x10ToggleUserStatus\x12\x1a.admin.ToggleStatusRequest\x1a\x1b.admin.ToggleStatusResponse\x12A\n" +
+	"\n" +
+	"DeleteUser\x12\x18.admin.DeleteUserRequest\x1a\x19.admin.DeleteUserResponse\x12P\n" +
 	"\x0fListAllProducts\x12\x1d.admin.ListAllProductsRequest\x1a\x1e.admin.ListAllProductsResponse\x12J\n" +
 	"\rUpdateProduct\x12\x1b.admin.UpdateProductRequest\x1a\x1c.admin.UpdateProductResponse\x12>\n" +
 	"\tShipOrder\x12\x17.admin.ShipOrderRequest\x1a\x18.admin.ShipOrderResponseB\x1aZ\x18go-ecommerce/proto/adminb\x06proto3"
@@ -858,7 +952,7 @@ func file_proto_admin_admin_proto_rawDescGZIP() []byte {
 	return file_proto_admin_admin_proto_rawDescData
 }
 
-var file_proto_admin_admin_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_proto_admin_admin_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_proto_admin_admin_proto_goTypes = []any{
 	(*StatsRequest)(nil),            // 0: admin.StatsRequest
 	(*StatsResponse)(nil),           // 1: admin.StatsResponse
@@ -867,31 +961,35 @@ var file_proto_admin_admin_proto_goTypes = []any{
 	(*ListUsersResponse)(nil),       // 4: admin.ListUsersResponse
 	(*ToggleStatusRequest)(nil),     // 5: admin.ToggleStatusRequest
 	(*ToggleStatusResponse)(nil),    // 6: admin.ToggleStatusResponse
-	(*ListAllProductsRequest)(nil),  // 7: admin.ListAllProductsRequest
-	(*AdminProductInfo)(nil),        // 8: admin.AdminProductInfo
-	(*ListAllProductsResponse)(nil), // 9: admin.ListAllProductsResponse
-	(*UpdateProductRequest)(nil),    // 10: admin.UpdateProductRequest
-	(*UpdateProductResponse)(nil),   // 11: admin.UpdateProductResponse
-	(*ShipOrderRequest)(nil),        // 12: admin.ShipOrderRequest
-	(*ShipOrderResponse)(nil),       // 13: admin.ShipOrderResponse
+	(*DeleteUserRequest)(nil),       // 7: admin.DeleteUserRequest
+	(*DeleteUserResponse)(nil),      // 8: admin.DeleteUserResponse
+	(*ListAllProductsRequest)(nil),  // 9: admin.ListAllProductsRequest
+	(*AdminProductInfo)(nil),        // 10: admin.AdminProductInfo
+	(*ListAllProductsResponse)(nil), // 11: admin.ListAllProductsResponse
+	(*UpdateProductRequest)(nil),    // 12: admin.UpdateProductRequest
+	(*UpdateProductResponse)(nil),   // 13: admin.UpdateProductResponse
+	(*ShipOrderRequest)(nil),        // 14: admin.ShipOrderRequest
+	(*ShipOrderResponse)(nil),       // 15: admin.ShipOrderResponse
 }
 var file_proto_admin_admin_proto_depIdxs = []int32{
 	3,  // 0: admin.ListUsersResponse.users:type_name -> admin.UserInfo
-	8,  // 1: admin.ListAllProductsResponse.products:type_name -> admin.AdminProductInfo
+	10, // 1: admin.ListAllProductsResponse.products:type_name -> admin.AdminProductInfo
 	0,  // 2: admin.AdminService.GetDashboardStats:input_type -> admin.StatsRequest
 	2,  // 3: admin.AdminService.ListUsers:input_type -> admin.ListUsersRequest
 	5,  // 4: admin.AdminService.ToggleUserStatus:input_type -> admin.ToggleStatusRequest
-	7,  // 5: admin.AdminService.ListAllProducts:input_type -> admin.ListAllProductsRequest
-	10, // 6: admin.AdminService.UpdateProduct:input_type -> admin.UpdateProductRequest
-	12, // 7: admin.AdminService.ShipOrder:input_type -> admin.ShipOrderRequest
-	1,  // 8: admin.AdminService.GetDashboardStats:output_type -> admin.StatsResponse
-	4,  // 9: admin.AdminService.ListUsers:output_type -> admin.ListUsersResponse
-	6,  // 10: admin.AdminService.ToggleUserStatus:output_type -> admin.ToggleStatusResponse
-	9,  // 11: admin.AdminService.ListAllProducts:output_type -> admin.ListAllProductsResponse
-	11, // 12: admin.AdminService.UpdateProduct:output_type -> admin.UpdateProductResponse
-	13, // 13: admin.AdminService.ShipOrder:output_type -> admin.ShipOrderResponse
-	8,  // [8:14] is the sub-list for method output_type
-	2,  // [2:8] is the sub-list for method input_type
+	7,  // 5: admin.AdminService.DeleteUser:input_type -> admin.DeleteUserRequest
+	9,  // 6: admin.AdminService.ListAllProducts:input_type -> admin.ListAllProductsRequest
+	12, // 7: admin.AdminService.UpdateProduct:input_type -> admin.UpdateProductRequest
+	14, // 8: admin.AdminService.ShipOrder:input_type -> admin.ShipOrderRequest
+	1,  // 9: admin.AdminService.GetDashboardStats:output_type -> admin.StatsResponse
+	4,  // 10: admin.AdminService.ListUsers:output_type -> admin.ListUsersResponse
+	6,  // 11: admin.AdminService.ToggleUserStatus:output_type -> admin.ToggleStatusResponse
+	8,  // 12: admin.AdminService.DeleteUser:output_type -> admin.DeleteUserResponse
+	11, // 13: admin.AdminService.ListAllProducts:output_type -> admin.ListAllProductsResponse
+	13, // 14: admin.AdminService.UpdateProduct:output_type -> admin.UpdateProductResponse
+	15, // 15: admin.AdminService.ShipOrder:output_type -> admin.ShipOrderResponse
+	9,  // [9:16] is the sub-list for method output_type
+	2,  // [2:9] is the sub-list for method input_type
 	2,  // [2:2] is the sub-list for extension type_name
 	2,  // [2:2] is the sub-list for extension extendee
 	0,  // [0:2] is the sub-list for field type_name
@@ -908,7 +1006,7 @@ func file_proto_admin_admin_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_admin_admin_proto_rawDesc), len(file_proto_admin_admin_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   14,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -22,6 +22,7 @@ const (
 	AdminService_GetDashboardStats_FullMethodName = "/admin.AdminService/GetDashboardStats"
 	AdminService_ListUsers_FullMethodName         = "/admin.AdminService/ListUsers"
 	AdminService_ToggleUserStatus_FullMethodName  = "/admin.AdminService/ToggleUserStatus"
+	AdminService_DeleteUser_FullMethodName        = "/admin.AdminService/DeleteUser"
 	AdminService_ListAllProducts_FullMethodName   = "/admin.AdminService/ListAllProducts"
 	AdminService_UpdateProduct_FullMethodName     = "/admin.AdminService/UpdateProduct"
 	AdminService_ShipOrder_FullMethodName         = "/admin.AdminService/ShipOrder"
@@ -36,6 +37,7 @@ type AdminServiceClient interface {
 	// --- 用户管理 ---
 	ListUsers(ctx context.Context, in *ListUsersRequest, opts ...grpc.CallOption) (*ListUsersResponse, error)
 	ToggleUserStatus(ctx context.Context, in *ToggleStatusRequest, opts ...grpc.CallOption) (*ToggleStatusResponse, error)
+	DeleteUser(ctx context.Context, in *DeleteUserRequest, opts ...grpc.CallOption) (*DeleteUserResponse, error)
 	// --- 商品管理 ---
 	ListAllProducts(ctx context.Context, in *ListAllProductsRequest, opts ...grpc.CallOption) (*ListAllProductsResponse, error)
 	UpdateProduct(ctx context.Context, in *UpdateProductRequest, opts ...grpc.CallOption) (*UpdateProductResponse, error)
@@ -81,6 +83,16 @@ func (c *adminServiceClient) ToggleUserStatus(ctx context.Context, in *ToggleSta
 	return out, nil
 }
 
+func (c *adminServiceClient) DeleteUser(ctx context.Context, in *DeleteUserRequest, opts ...grpc.CallOption) (*DeleteUserResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteUserResponse)
+	err := c.cc.Invoke(ctx, AdminService_DeleteUser_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *adminServiceClient) ListAllProducts(ctx context.Context, in *ListAllProductsRequest, opts ...grpc.CallOption) (*ListAllProductsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListAllProductsResponse)
@@ -120,6 +132,7 @@ type AdminServiceServer interface {
 	// --- 用户管理 ---
 	ListUsers(context.Context, *ListUsersRequest) (*ListUsersResponse, error)
 	ToggleUserStatus(context.Context, *ToggleStatusRequest) (*ToggleStatusResponse, error)
+	DeleteUser(context.Context, *DeleteUserRequest) (*DeleteUserResponse, error)
 	// --- 商品管理 ---
 	ListAllProducts(context.Context, *ListAllProductsRequest) (*ListAllProductsResponse, error)
 	UpdateProduct(context.Context, *UpdateProductRequest) (*UpdateProductResponse, error)
@@ -143,6 +156,9 @@ func (UnimplementedAdminServiceServer) ListUsers(context.Context, *ListUsersRequ
 }
 func (UnimplementedAdminServiceServer) ToggleUserStatus(context.Context, *ToggleStatusRequest) (*ToggleStatusResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ToggleUserStatus not implemented")
+}
+func (UnimplementedAdminServiceServer) DeleteUser(context.Context, *DeleteUserRequest) (*DeleteUserResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteUser not implemented")
 }
 func (UnimplementedAdminServiceServer) ListAllProducts(context.Context, *ListAllProductsRequest) (*ListAllProductsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListAllProducts not implemented")
@@ -228,6 +244,24 @@ func _AdminService_ToggleUserStatus_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AdminService_DeleteUser_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteUserRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).DeleteUser(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AdminService_DeleteUser_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).DeleteUser(ctx, req.(*DeleteUserRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AdminService_ListAllProducts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListAllProductsRequest)
 	if err := dec(in); err != nil {
@@ -300,6 +334,10 @@ var AdminService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ToggleUserStatus",
 			Handler:    _AdminService_ToggleUserStatus_Handler,
+		},
+		{
+			MethodName: "DeleteUser",
+			Handler:    _AdminService_DeleteUser_Handler,
 		},
 		{
 			MethodName: "ListAllProducts",

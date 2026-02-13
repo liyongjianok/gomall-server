@@ -29,8 +29,9 @@ message LoginRequest {
 }
 
 message LoginResponse {
-  int64 user_id = 1;
+  int64 user_id = 1 [json_name = "user_id"];
   string token = 2;
+  string role = 3 [json_name = "role"];
 }
 
 message GetUserInfoRequest {
@@ -43,6 +44,7 @@ message GetUserInfoResponse {
     string mobile = 3;
     string nickname = 4;
     string avatar = 5; // 头像URL
+    string role = 6; // 管理员角色标识
 }
 
 message UpdateUserRequest {

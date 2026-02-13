@@ -63,17 +63,18 @@ func (s *server) Register(ctx context.Context, req *user.RegisterRequest) (*user
 
 func (s *server) Login(ctx context.Context, req *user.LoginRequest) (*user.LoginResponse, error) {
 	var u model.User
+	// 1. 查询用户（确保数据库里有 role 字段且 model 结构体里也有）
 	if err := s.db.Where("username = ?", req.Username).First(&u).Error; err != nil {
 		return nil, status.Error(codes.NotFound, "User not found")
 	}
 
-	// 密码比对逻辑 (数据库里的Hash vs 输入的明文)
+	// 2. 密码比对逻辑
 	err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(req.Password))
 	if err != nil {
 		return nil, status.Error(codes.Unauthenticated, "Invalid password")
 	}
 
-	// 生成 JWT
+	// 3. 生成 JWT
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"user_id": u.ID,
 		"exp":     time.Now().Add(time.Hour * 24 * 7).Unix(),
@@ -85,7 +86,11 @@ func (s *server) Login(ctx context.Context, req *user.LoginRequest) (*user.Login
 		return nil, status.Error(codes.Internal, "Failed to generate token")
 	}
 
-	return &user.LoginResponse{UserId: int64(u.ID), Token: tokenString}, nil
+	return &user.LoginResponse{
+		UserId: int64(u.ID),
+		Token:  tokenString,
+		Role:   u.Role,
+	}, nil
 }
 
 // GetUserInfo 获取用户信息
@@ -107,6 +112,7 @@ func (s *server) GetUserInfo(ctx context.Context, req *user.GetUserInfoRequest) 
 		Mobile:   u.Mobile,
 		Nickname: u.Nickname,
 		Avatar:   avatar,
+		Role:     u.Role,
 	}, nil
 }
 

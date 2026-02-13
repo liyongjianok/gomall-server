@@ -680,6 +680,19 @@ func main() {
 				response.Success(ctx, resp)
 			})
 
+			// 删除用户
+			adminGroup.DELETE("/user/:id", func(ctx *gin.Context) {
+				idStr := ctx.Param("id")
+				id, _ := strconv.ParseInt(idStr, 10, 64)
+
+				resp, err := adminClient.DeleteUser(ctx.Request.Context(), &admin.DeleteUserRequest{UserId: id})
+				if err != nil {
+					response.Error(ctx, 500, err.Error())
+					return
+				}
+				response.Success(ctx, resp)
+			})
+
 			// 商品管理列表
 			adminGroup.GET("/products", func(ctx *gin.Context) {
 				page, _ := strconv.Atoi(ctx.DefaultQuery("page", "1"))

@@ -187,8 +187,9 @@ func (x *LoginRequest) GetPassword() string {
 
 type LoginResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	UserId        int64                  `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	UserId        int64                  `protobuf:"varint,1,opt,name=user_id,proto3" json:"user_id,omitempty"`
 	Token         string                 `protobuf:"bytes,2,opt,name=token,proto3" json:"token,omitempty"`
+	Role          string                 `protobuf:"bytes,3,opt,name=role,proto3" json:"role,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -233,6 +234,13 @@ func (x *LoginResponse) GetUserId() int64 {
 func (x *LoginResponse) GetToken() string {
 	if x != nil {
 		return x.Token
+	}
+	return ""
+}
+
+func (x *LoginResponse) GetRole() string {
+	if x != nil {
+		return x.Role
 	}
 	return ""
 }
@@ -288,6 +296,7 @@ type GetUserInfoResponse struct {
 	Mobile        string                 `protobuf:"bytes,3,opt,name=mobile,proto3" json:"mobile,omitempty"`
 	Nickname      string                 `protobuf:"bytes,4,opt,name=nickname,proto3" json:"nickname,omitempty"`
 	Avatar        string                 `protobuf:"bytes,5,opt,name=avatar,proto3" json:"avatar,omitempty"` // 头像URL
+	Role          string                 `protobuf:"bytes,6,opt,name=role,proto3" json:"role,omitempty"`     // 管理员角色标识
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -353,6 +362,13 @@ func (x *GetUserInfoResponse) GetNickname() string {
 func (x *GetUserInfoResponse) GetAvatar() string {
 	if x != nil {
 		return x.Avatar
+	}
+	return ""
+}
+
+func (x *GetUserInfoResponse) GetRole() string {
+	if x != nil {
+		return x.Role
 	}
 	return ""
 }
@@ -587,18 +603,20 @@ const file_proto_user_user_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\"F\n" +
 	"\fLoginRequest\x12\x1a\n" +
 	"\busername\x18\x01 \x01(\tR\busername\x12\x1a\n" +
-	"\bpassword\x18\x02 \x01(\tR\bpassword\">\n" +
-	"\rLoginResponse\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12\x14\n" +
-	"\x05token\x18\x02 \x01(\tR\x05token\"$\n" +
+	"\bpassword\x18\x02 \x01(\tR\bpassword\"S\n" +
+	"\rLoginResponse\x12\x18\n" +
+	"\auser_id\x18\x01 \x01(\x03R\auser_id\x12\x14\n" +
+	"\x05token\x18\x02 \x01(\tR\x05token\x12\x12\n" +
+	"\x04role\x18\x03 \x01(\tR\x04role\"$\n" +
 	"\x12GetUserInfoRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\x03R\x02id\"\x8d\x01\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\"\xa1\x01\n" +
 	"\x13GetUserInfoResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x1a\n" +
 	"\busername\x18\x02 \x01(\tR\busername\x12\x16\n" +
 	"\x06mobile\x18\x03 \x01(\tR\x06mobile\x12\x1a\n" +
 	"\bnickname\x18\x04 \x01(\tR\bnickname\x12\x16\n" +
-	"\x06avatar\x18\x05 \x01(\tR\x06avatar\"o\n" +
+	"\x06avatar\x18\x05 \x01(\tR\x06avatar\x12\x12\n" +
+	"\x04role\x18\x06 \x01(\tR\x04role\"o\n" +
 	"\x11UpdateUserRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x1a\n" +
 	"\bnickname\x18\x02 \x01(\tR\bnickname\x12\x16\n" +

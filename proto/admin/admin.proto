@@ -9,6 +9,7 @@ service AdminService {
   // --- 用户管理 ---
   rpc ListUsers(ListUsersRequest) returns (ListUsersResponse);
   rpc ToggleUserStatus(ToggleStatusRequest) returns (ToggleStatusResponse);
+  rpc DeleteUser(DeleteUserRequest) returns (DeleteUserResponse);
   
   // --- 商品管理 ---
   rpc ListAllProducts(ListAllProductsRequest) returns (ListAllProductsResponse);
@@ -50,6 +51,14 @@ message ToggleStatusRequest {
   bool disabled = 2;
 }
 message ToggleStatusResponse { bool success = 1; }
+
+message DeleteUserRequest {
+  int64 user_id = 1;
+}
+
+message DeleteUserResponse {
+  bool success = 1;
+}
 
 message ListAllProductsRequest {
   int32 page = 1;

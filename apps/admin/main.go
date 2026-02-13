@@ -14,7 +14,9 @@ import (
 	"go-ecommerce/proto/admin"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/reflection"
+	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
 )
 
@@ -57,6 +59,15 @@ func (s *server) ListUsers(ctx context.Context, req *admin.ListUsersRequest) (*a
 		})
 	}
 	return &admin.ListUsersResponse{Users: res, Total: int32(total)}, nil
+}
+
+func (s *server) DeleteUser(ctx context.Context, req *admin.DeleteUserRequest) (*admin.DeleteUserResponse, error) {
+	// 管理员操作，直接从库中删除（或者你可以改为软删除）
+	err := s.dbUser.Table("users").Delete(&struct{ ID int64 }{ID: req.UserId}).Error
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "删除用户失败: %v", err)
+	}
+	return &admin.DeleteUserResponse{Success: true}, nil
 }
 
 func (s *server) ToggleUserStatus(ctx context.Context, req *admin.ToggleStatusRequest) (*admin.ToggleStatusResponse, error) {
