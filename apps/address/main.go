@@ -43,9 +43,6 @@ type server struct {
 
 // 1. 新增地址
 func (s *server) CreateAddress(ctx context.Context, req *address.CreateAddressRequest) (*address.CreateAddressResponse, error) {
-	var count int64
-	s.db.Model(&Address{}).Where("user_id = ?", req.UserId).Count(&count)
-
 	addr := Address{
 		UserID:        req.UserId,
 		Name:          req.Name,
@@ -54,7 +51,7 @@ func (s *server) CreateAddress(ctx context.Context, req *address.CreateAddressRe
 		City:          req.City,
 		District:      req.District,
 		DetailAddress: req.DetailAddress,
-		IsDefault:     count == 0, // 如果是首个地址，默认设为 true
+		IsDefault:     false,
 	}
 	if err := s.db.Create(&addr).Error; err != nil {
 		return nil, status.Error(codes.Internal, "Database error")
@@ -140,34 +137,6 @@ func (s *server) DeleteAddress(ctx context.Context, req *address.DeleteAddressRe
 		return nil, status.Error(codes.NotFound, "地址不存在或无权删除")
 	}
 	return &address.DeleteAddressResponse{Success: true}, nil
-}
-
-// 6. 设置默认地址 (核心逻辑：排他性更新)
-func (s *server) SetDefaultAddress(ctx context.Context, req *address.SetDefaultAddressRequest) (*address.SetDefaultAddressResponse, error) {
-	// 开启事务
-	err := s.db.Transaction(func(tx *gorm.DB) error {
-		// 1. 先把该用户下所有的地址都设为非默认
-		if err := tx.Model(&Address{}).Where("user_id = ?", req.UserId).Update("is_default", false).Error; err != nil {
-			return err
-		}
-
-		// 2. 把指定的地址设为默认
-		result := tx.Model(&Address{}).Where("id = ? AND user_id = ?", req.AddressId, req.UserId).Update("is_default", true)
-		if result.Error != nil {
-			return result.Error
-		}
-		if result.RowsAffected == 0 {
-			return fmt.Errorf("地址不存在")
-		}
-		return nil
-	})
-
-	if err != nil {
-		log.Printf("[Address] 设置默认地址失败: %v", err)
-		return nil, status.Errorf(codes.Internal, "设置默认地址失败: %v", err)
-	}
-
-	return &address.SetDefaultAddressResponse{Success: true}, nil
 }
 
 func main() {
