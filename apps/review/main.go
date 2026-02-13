@@ -13,12 +13,14 @@ import (
 	"go-ecommerce/pkg/database"
 	"go-ecommerce/pkg/discovery"
 	"go-ecommerce/pkg/tracer"
+	"go-ecommerce/proto/order"
 	"go-ecommerce/proto/review"
 
 	_ "github.com/mbobakov/grpc-consul-resolver"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
@@ -45,7 +47,8 @@ type Review struct {
 
 type server struct {
 	review.UnimplementedReviewServiceServer
-	db *gorm.DB
+	db          *gorm.DB
+	orderClient order.OrderServiceClient // 增加订单客户端引用
 }
 
 // CreateReview 创建评价
@@ -64,10 +67,23 @@ func (s *server) CreateReview(ctx context.Context, req *review.CreateReviewReque
 		SkuName:      req.SkuName,
 	}
 
-	// 尝试写入数据库，如果报唯一键冲突，说明已经评价过了
 	if err := s.db.Create(&rev).Error; err != nil {
-		return nil, status.Errorf(codes.AlreadyExists, "创建评价失败(可能已评价该商品): %v", err)
+		return nil, status.Errorf(codes.AlreadyExists, "创建评价失败: %v", err)
 	}
+
+	// 同步调用 Order Service 更新状态，方便排查错误
+	log.Printf("[Review] 评价成功，准备更新订单状态: %s", req.OrderNo)
+	_, err := s.orderClient.UpdateItemReviewStatus(ctx, &order.UpdateItemReviewStatusRequest{
+		OrderNo:    req.OrderNo,
+		SkuId:      req.SkuId,
+		IsReviewed: true,
+	})
+
+	if err != nil {
+		// 即使更新状态失败，我们也不拦截评价结果，但要打印出来看为什么失败
+		log.Printf("[Critical] 调用 OrderService 失败: %v", err)
+	}
+
 	return &review.CreateReviewResponse{ReviewId: rev.ID}, nil
 }
 
@@ -103,7 +119,6 @@ func (s *server) ListReviews(ctx context.Context, req *review.ListReviewsRequest
 		})
 	}
 
-	// 计算平均分
 	var avg float32 = 5.0
 	if total > 0 {
 		avg = float32(totalStar) / float32(total)
@@ -116,32 +131,25 @@ func (s *server) ListReviews(ctx context.Context, req *review.ListReviewsRequest
 	}, nil
 }
 
-// CheckReviewStatus 检查用户是否已评价某订单的某商品
+// CheckReviewStatus 检查评价状态
 func (s *server) CheckReviewStatus(ctx context.Context, req *review.CheckReviewStatusRequest) (*review.CheckReviewStatusResponse, error) {
 	var count int64
-	// 🔥 核心修改：去掉 .First(&rev)，直接用 Count
-	// GORM 的 .First() 如果找不到记录会返回 error，导致整个请求报错 500
-	// 而 .Count() 找不到记录只会返回 0，不会报错
 	err := s.db.Model(&Review{}).
 		Where("user_id = ? AND order_no = ? AND sku_id = ?", req.UserId, req.OrderNo, req.SkuId).
 		Count(&count).Error
 
 	if err != nil {
-		// 如果是真正的数据库错误（比如连接断开），才返回 error
 		log.Printf("查询评价状态失败: %v", err)
 		return nil, status.Error(codes.Internal, "查询数据库失败")
 	}
 
-	// 如果 count > 0，说明找到了记录，即“已评价”
-	// 如果 count == 0，说明没找到，即“未评价”
 	return &review.CheckReviewStatusResponse{
 		HasReviewed: count > 0,
-		ReviewId:    0, // 简化处理，只返回是否评价即可
+		ReviewId:    0,
 	}, nil
 }
 
 func main() {
-	// 初始化链路追踪
 	jaegerAddr := "jaeger:4318"
 	if os.Getenv("JAEGER_HOST") != "" {
 		jaegerAddr = os.Getenv("JAEGER_HOST")
@@ -152,7 +160,6 @@ func main() {
 	}
 	defer func() { _ = tp.Shutdown(context.Background()) }()
 
-	// 加载配置
 	c, err := config.LoadConfig(".")
 	if err != nil {
 		log.Fatalf("加载配置失败: %v", err)
@@ -165,19 +172,28 @@ func main() {
 		c.Consul.Address = v
 	}
 
-	// 强制指定数据库名为 db_review
 	c.Mysql.DbName = "db_review"
-
-	// 初始化数据库并自动迁移表结构
 	db, err := database.InitMySQL(c.Mysql)
 	if err != nil {
 		log.Fatalf("初始化 MySQL 失败: %v", err)
 	}
 	db.AutoMigrate(&Review{})
 
-	// 启动 gRPC 服务
+	// 初始化订单服务客户端
+	opts := []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy": "round_robin"}`),
+	}
+	orderConn, err := grpc.Dial(fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "order-service"), opts...)
+	if err != nil {
+		log.Fatalf("连接订单服务失败: %v", err)
+	}
+
 	s := grpc.NewServer(grpc.UnaryInterceptor(otelgrpc.UnaryServerInterceptor()))
-	review.RegisterReviewServiceServer(s, &server{db: db})
+	review.RegisterReviewServiceServer(s, &server{
+		db:          db,
+		orderClient: order.NewOrderServiceClient(orderConn),
+	})
 	reflection.Register(s)
 
 	lis, _ := net.Listen("tcp", fmt.Sprintf(":%d", c.Service.Port))

@@ -330,6 +330,7 @@ type OrderItem struct {
 	Picture       string                 `protobuf:"bytes,5,opt,name=picture,proto3" json:"picture,omitempty"`
 	SkuId         int64                  `protobuf:"varint,6,opt,name=sku_id,json=skuId,proto3" json:"sku_id,omitempty"`
 	ProductId     int64                  `protobuf:"varint,7,opt,name=product_id,json=productId,proto3" json:"product_id,omitempty"`
+	IsReviewed    bool                   `protobuf:"varint,8,opt,name=is_reviewed,json=isReviewed,proto3" json:"is_reviewed,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -411,6 +412,13 @@ func (x *OrderItem) GetProductId() int64 {
 		return x.ProductId
 	}
 	return 0
+}
+
+func (x *OrderItem) GetIsReviewed() bool {
+	if x != nil {
+		return x.IsReviewed
+	}
+	return false
 }
 
 type MarkOrderPaidRequest struct {
@@ -693,6 +701,110 @@ func (x *UpdateOrderStatusResponse) GetSuccess() bool {
 	return false
 }
 
+type UpdateItemReviewStatusRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OrderNo       string                 `protobuf:"bytes,1,opt,name=order_no,json=orderNo,proto3" json:"order_no,omitempty"`
+	SkuId         int64                  `protobuf:"varint,2,opt,name=sku_id,json=skuId,proto3" json:"sku_id,omitempty"`
+	IsReviewed    bool                   `protobuf:"varint,3,opt,name=is_reviewed,json=isReviewed,proto3" json:"is_reviewed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateItemReviewStatusRequest) Reset() {
+	*x = UpdateItemReviewStatusRequest{}
+	mi := &file_proto_order_order_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateItemReviewStatusRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateItemReviewStatusRequest) ProtoMessage() {}
+
+func (x *UpdateItemReviewStatusRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_order_order_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateItemReviewStatusRequest.ProtoReflect.Descriptor instead.
+func (*UpdateItemReviewStatusRequest) Descriptor() ([]byte, []int) {
+	return file_proto_order_order_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *UpdateItemReviewStatusRequest) GetOrderNo() string {
+	if x != nil {
+		return x.OrderNo
+	}
+	return ""
+}
+
+func (x *UpdateItemReviewStatusRequest) GetSkuId() int64 {
+	if x != nil {
+		return x.SkuId
+	}
+	return 0
+}
+
+func (x *UpdateItemReviewStatusRequest) GetIsReviewed() bool {
+	if x != nil {
+		return x.IsReviewed
+	}
+	return false
+}
+
+type UpdateItemReviewStatusResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateItemReviewStatusResponse) Reset() {
+	*x = UpdateItemReviewStatusResponse{}
+	mi := &file_proto_order_order_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateItemReviewStatusResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateItemReviewStatusResponse) ProtoMessage() {}
+
+func (x *UpdateItemReviewStatusResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_order_order_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateItemReviewStatusResponse.ProtoReflect.Descriptor instead.
+func (*UpdateItemReviewStatusResponse) Descriptor() ([]byte, []int) {
+	return file_proto_order_order_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *UpdateItemReviewStatusResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
 var File_proto_order_order_proto protoreflect.FileDescriptor
 
 const file_proto_order_order_proto_rawDesc = "" +
@@ -719,7 +831,7 @@ const file_proto_order_order_proto_rawDesc = "" +
 	"\x05items\x18\x05 \x03(\v2\x10.order.OrderItemR\x05items\x12#\n" +
 	"\rreceiver_name\x18\x06 \x01(\tR\freceiverName\x12'\n" +
 	"\x0freceiver_mobile\x18\a \x01(\tR\x0ereceiverMobile\x12)\n" +
-	"\x10receiver_address\x18\b \x01(\tR\x0freceiverAddress\"\xcb\x01\n" +
+	"\x10receiver_address\x18\b \x01(\tR\x0freceiverAddress\"\xec\x01\n" +
 	"\tOrderItem\x12!\n" +
 	"\fproduct_name\x18\x01 \x01(\tR\vproductName\x12\x19\n" +
 	"\bsku_name\x18\x02 \x01(\tR\askuName\x12\x14\n" +
@@ -728,7 +840,9 @@ const file_proto_order_order_proto_rawDesc = "" +
 	"\apicture\x18\x05 \x01(\tR\apicture\x12\x15\n" +
 	"\x06sku_id\x18\x06 \x01(\x03R\x05skuId\x12\x1d\n" +
 	"\n" +
-	"product_id\x18\a \x01(\x03R\tproductId\"1\n" +
+	"product_id\x18\a \x01(\x03R\tproductId\x12\x1f\n" +
+	"\vis_reviewed\x18\b \x01(\bR\n" +
+	"isReviewed\"1\n" +
 	"\x14MarkOrderPaidRequest\x12\x19\n" +
 	"\border_no\x18\x01 \x01(\tR\aorderNo\"1\n" +
 	"\x15MarkOrderPaidResponse\x12\x18\n" +
@@ -742,14 +856,22 @@ const file_proto_order_order_proto_rawDesc = "" +
 	"\border_no\x18\x01 \x01(\tR\aorderNo\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\x05R\x06status\"5\n" +
 	"\x19UpdateOrderStatusResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess2\x81\x03\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"r\n" +
+	"\x1dUpdateItemReviewStatusRequest\x12\x19\n" +
+	"\border_no\x18\x01 \x01(\tR\aorderNo\x12\x15\n" +
+	"\x06sku_id\x18\x02 \x01(\x03R\x05skuId\x12\x1f\n" +
+	"\vis_reviewed\x18\x03 \x01(\bR\n" +
+	"isReviewed\":\n" +
+	"\x1eUpdateItemReviewStatusResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess2\xe8\x03\n" +
 	"\fOrderService\x12D\n" +
 	"\vCreateOrder\x12\x19.order.CreateOrderRequest\x1a\x1a.order.CreateOrderResponse\x12A\n" +
 	"\n" +
 	"ListOrders\x12\x18.order.ListOrdersRequest\x1a\x19.order.ListOrdersResponse\x12J\n" +
 	"\rMarkOrderPaid\x12\x1b.order.MarkOrderPaidRequest\x1a\x1c.order.MarkOrderPaidResponse\x12D\n" +
 	"\vCancelOrder\x12\x19.order.CancelOrderRequest\x1a\x1a.order.CancelOrderResponse\x12V\n" +
-	"\x11UpdateOrderStatus\x12\x1f.order.UpdateOrderStatusRequest\x1a .order.UpdateOrderStatusResponseB\x1aZ\x18go-ecommerce/proto/orderb\x06proto3"
+	"\x11UpdateOrderStatus\x12\x1f.order.UpdateOrderStatusRequest\x1a .order.UpdateOrderStatusResponse\x12e\n" +
+	"\x16UpdateItemReviewStatus\x12$.order.UpdateItemReviewStatusRequest\x1a%.order.UpdateItemReviewStatusResponseB\x1aZ\x18go-ecommerce/proto/orderb\x06proto3"
 
 var (
 	file_proto_order_order_proto_rawDescOnce sync.Once
@@ -763,20 +885,22 @@ func file_proto_order_order_proto_rawDescGZIP() []byte {
 	return file_proto_order_order_proto_rawDescData
 }
 
-var file_proto_order_order_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_proto_order_order_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_proto_order_order_proto_goTypes = []any{
-	(*CreateOrderRequest)(nil),        // 0: order.CreateOrderRequest
-	(*CreateOrderResponse)(nil),       // 1: order.CreateOrderResponse
-	(*ListOrdersRequest)(nil),         // 2: order.ListOrdersRequest
-	(*ListOrdersResponse)(nil),        // 3: order.ListOrdersResponse
-	(*OrderInfo)(nil),                 // 4: order.OrderInfo
-	(*OrderItem)(nil),                 // 5: order.OrderItem
-	(*MarkOrderPaidRequest)(nil),      // 6: order.MarkOrderPaidRequest
-	(*MarkOrderPaidResponse)(nil),     // 7: order.MarkOrderPaidResponse
-	(*CancelOrderRequest)(nil),        // 8: order.CancelOrderRequest
-	(*CancelOrderResponse)(nil),       // 9: order.CancelOrderResponse
-	(*UpdateOrderStatusRequest)(nil),  // 10: order.UpdateOrderStatusRequest
-	(*UpdateOrderStatusResponse)(nil), // 11: order.UpdateOrderStatusResponse
+	(*CreateOrderRequest)(nil),             // 0: order.CreateOrderRequest
+	(*CreateOrderResponse)(nil),            // 1: order.CreateOrderResponse
+	(*ListOrdersRequest)(nil),              // 2: order.ListOrdersRequest
+	(*ListOrdersResponse)(nil),             // 3: order.ListOrdersResponse
+	(*OrderInfo)(nil),                      // 4: order.OrderInfo
+	(*OrderItem)(nil),                      // 5: order.OrderItem
+	(*MarkOrderPaidRequest)(nil),           // 6: order.MarkOrderPaidRequest
+	(*MarkOrderPaidResponse)(nil),          // 7: order.MarkOrderPaidResponse
+	(*CancelOrderRequest)(nil),             // 8: order.CancelOrderRequest
+	(*CancelOrderResponse)(nil),            // 9: order.CancelOrderResponse
+	(*UpdateOrderStatusRequest)(nil),       // 10: order.UpdateOrderStatusRequest
+	(*UpdateOrderStatusResponse)(nil),      // 11: order.UpdateOrderStatusResponse
+	(*UpdateItemReviewStatusRequest)(nil),  // 12: order.UpdateItemReviewStatusRequest
+	(*UpdateItemReviewStatusResponse)(nil), // 13: order.UpdateItemReviewStatusResponse
 }
 var file_proto_order_order_proto_depIdxs = []int32{
 	4,  // 0: order.ListOrdersResponse.orders:type_name -> order.OrderInfo
@@ -786,13 +910,15 @@ var file_proto_order_order_proto_depIdxs = []int32{
 	6,  // 4: order.OrderService.MarkOrderPaid:input_type -> order.MarkOrderPaidRequest
 	8,  // 5: order.OrderService.CancelOrder:input_type -> order.CancelOrderRequest
 	10, // 6: order.OrderService.UpdateOrderStatus:input_type -> order.UpdateOrderStatusRequest
-	1,  // 7: order.OrderService.CreateOrder:output_type -> order.CreateOrderResponse
-	3,  // 8: order.OrderService.ListOrders:output_type -> order.ListOrdersResponse
-	7,  // 9: order.OrderService.MarkOrderPaid:output_type -> order.MarkOrderPaidResponse
-	9,  // 10: order.OrderService.CancelOrder:output_type -> order.CancelOrderResponse
-	11, // 11: order.OrderService.UpdateOrderStatus:output_type -> order.UpdateOrderStatusResponse
-	7,  // [7:12] is the sub-list for method output_type
-	2,  // [2:7] is the sub-list for method input_type
+	12, // 7: order.OrderService.UpdateItemReviewStatus:input_type -> order.UpdateItemReviewStatusRequest
+	1,  // 8: order.OrderService.CreateOrder:output_type -> order.CreateOrderResponse
+	3,  // 9: order.OrderService.ListOrders:output_type -> order.ListOrdersResponse
+	7,  // 10: order.OrderService.MarkOrderPaid:output_type -> order.MarkOrderPaidResponse
+	9,  // 11: order.OrderService.CancelOrder:output_type -> order.CancelOrderResponse
+	11, // 12: order.OrderService.UpdateOrderStatus:output_type -> order.UpdateOrderStatusResponse
+	13, // 13: order.OrderService.UpdateItemReviewStatus:output_type -> order.UpdateItemReviewStatusResponse
+	8,  // [8:14] is the sub-list for method output_type
+	2,  // [2:8] is the sub-list for method input_type
 	2,  // [2:2] is the sub-list for extension type_name
 	2,  // [2:2] is the sub-list for extension extendee
 	0,  // [0:2] is the sub-list for field type_name
@@ -809,7 +935,7 @@ func file_proto_order_order_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_order_order_proto_rawDesc), len(file_proto_order_order_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   12,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

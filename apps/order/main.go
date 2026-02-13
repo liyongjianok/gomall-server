@@ -295,45 +295,43 @@ func (s *server) CreateOrder(ctx context.Context, req *order.CreateOrderRequest)
 	}
 	fullAddress := fmt.Sprintf("%s%s%s%s", addrResp.Address.Province, addrResp.Address.City, addrResp.Address.District, addrResp.Address.DetailAddress)
 
+	// 利用 cartResp 校验商品是否在购物车中，解决 cartResp 未使用报错
 	cartResp, err := s.cartClient.GetCart(ctx, &cart.GetCartRequest{UserId: req.UserId})
 	if err != nil || len(cartResp.Items) == 0 {
 		return nil, status.Error(codes.Unknown, "购物车为空")
 	}
 
-	selectedMap := make(map[int64]bool)
-	for _, id := range req.SkuIds {
-		selectedMap[id] = true
-	}
-
-	var selectedItems []*cart.CartItem
+	// 将购物车项存入 Map 方便比对
+	cartMap := make(map[int64]*cart.CartItem)
 	for _, item := range cartResp.Items {
-		if selectedMap[item.SkuId] {
-			selectedItems = append(selectedItems, item)
-		}
-	}
-
-	if len(selectedItems) == 0 {
-		return nil, status.Error(codes.InvalidArgument, "选中的商品无效")
+		cartMap[item.SkuId] = item
 	}
 
 	tx := s.db.Begin()
 	var totalAmount float32
 	var orderItems []model.OrderItem
 
-	for _, item := range selectedItems {
-		prodResp, err := s.productClient.GetProduct(ctx, &product.GetProductRequest{Id: item.SkuId})
-		if err != nil {
+	for _, skuId := range req.SkuIds {
+		// 校验下单项是否存在于购物车
+		cartItem, ok := cartMap[skuId]
+		if !ok {
 			tx.Rollback()
-			return nil, status.Errorf(codes.NotFound, "商品 SKU %d 不存在", item.SkuId)
+			return nil, status.Errorf(codes.InvalidArgument, "商品 SKU %d 不在购物车中", skuId)
 		}
 
-		_, err = s.productClient.DecreaseStock(ctx, &product.DecreaseStockRequest{SkuId: item.SkuId, Count: item.Quantity})
+		prodResp, err := s.productClient.GetProduct(ctx, &product.GetProductRequest{Id: skuId})
+		if err != nil {
+			tx.Rollback()
+			return nil, status.Errorf(codes.NotFound, "商品 SKU %d 不存在", skuId)
+		}
+
+		_, err = s.productClient.DecreaseStock(ctx, &product.DecreaseStockRequest{SkuId: skuId, Count: cartItem.Quantity})
 		if err != nil {
 			tx.Rollback()
 			return nil, status.Errorf(codes.ResourceExhausted, "商品 %s 库存不足", prodResp.Name)
 		}
 
-		totalAmount += prodResp.Price * float32(item.Quantity)
+		totalAmount += prodResp.Price * float32(cartItem.Quantity)
 
 		orderItems = append(orderItems, model.OrderItem{
 			ProductID:   prodResp.Id,
@@ -341,7 +339,7 @@ func (s *server) CreateOrder(ctx context.Context, req *order.CreateOrderRequest)
 			ProductName: prodResp.Name,
 			SkuName:     prodResp.SkuName,
 			Price:       float64(prodResp.Price),
-			Quantity:    int(item.Quantity),
+			Quantity:    int(cartItem.Quantity),
 			Picture:     prodResp.Picture,
 		})
 	}
@@ -364,10 +362,10 @@ func (s *server) CreateOrder(ctx context.Context, req *order.CreateOrderRequest)
 	}
 	tx.Commit()
 
-	for _, item := range selectedItems {
+	for _, skuId := range req.SkuIds {
 		_, _ = s.cartClient.DeleteItem(ctx, &cart.DeleteItemRequest{
 			UserId: req.UserId,
-			SkuId:  item.SkuId,
+			SkuId:  skuId,
 		})
 	}
 
@@ -395,6 +393,7 @@ func (s *server) ListOrders(ctx context.Context, req *order.ListOrdersRequest) (
 				Price:       float32(item.Price),
 				Quantity:    int32(item.Quantity),
 				Picture:     item.Picture,
+				IsReviewed:  item.IsReviewed, // 🔥 返回评价状态
 			})
 		}
 		respOrders = append(respOrders, &order.OrderInfo{
@@ -409,6 +408,22 @@ func (s *server) ListOrders(ctx context.Context, req *order.ListOrdersRequest) (
 		})
 	}
 	return &order.ListOrdersResponse{Orders: respOrders}, nil
+}
+
+// UpdateItemReviewStatus 更新订单内具体商品的评价状态
+func (s *server) UpdateItemReviewStatus(ctx context.Context, req *order.UpdateItemReviewStatusRequest) (*order.UpdateItemReviewStatusResponse, error) {
+	var o model.Order
+	if err := s.db.Where("order_no = ?", req.OrderNo).First(&o).Error; err != nil {
+		return nil, status.Errorf(codes.NotFound, "未找到订单")
+	}
+	// 更新 order_items 物理表
+	err := s.db.Table("order_items").
+		Where("order_id = ? AND sku_id = ?", o.ID, req.SkuId).
+		Update("is_reviewed", req.IsReviewed).Error
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "更新评价状态失败: %v", err)
+	}
+	return &order.UpdateItemReviewStatusResponse{Success: true}, nil
 }
 
 // MarkOrderPaid 标记支付成功 (RPC)
@@ -457,6 +472,12 @@ func (s *server) cancelOrderLogic(ctx context.Context, orderNo string) (*order.C
 
 	log.Printf("订单 %s 已成功取消", orderNo)
 	return &order.CancelOrderResponse{Success: true}, nil
+}
+
+// 🔥 新增：UpdateOrderStatus 用于更新主订单状态
+func (s *server) UpdateOrderStatus(ctx context.Context, req *order.UpdateOrderStatusRequest) (*order.UpdateOrderStatusResponse, error) {
+	err := s.db.Model(&model.Order{}).Where("order_no = ?", req.OrderNo).Update("status", req.Status).Error
+	return &order.UpdateOrderStatusResponse{Success: err == nil}, nil
 }
 
 func main() {

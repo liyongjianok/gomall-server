@@ -31,6 +31,7 @@ type OrderItem struct {
 	Price       float64 `gorm:"type:decimal(10,2)"`
 	Quantity    int     `gorm:"type:int"`
 	Picture     string  `gorm:"type:varchar(255)"`
+	IsReviewed  bool    `gorm:"column:is_reviewed;default:false"`
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }
