@@ -256,6 +256,30 @@ services:
       consul:
         condition: service_healthy
 
+  admin-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_PATH: apps/admin
+    container_name: go-ecommerce-admin-service
+    depends_on:
+      consul:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+    ports:
+      - "50058:50058"
+    environment:
+      - SERVICE_NAME=admin-service
+      - SERVICE_PORT=50058
+      - CONSUL_ADDRESS=consul:8500
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=root
+      - MYSQL_DBNAME=db_user
+
   gateway:
     build:
       context: .
@@ -277,7 +301,6 @@ services:
       address-service:
         condition: service_started
       review-service:
-        # 🔥 新增：网关依赖于评价服务先启动
         condition: service_started
     ports:
       - "8080:8080"

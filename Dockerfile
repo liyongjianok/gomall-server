@@ -14,7 +14,7 @@ COPY . .
 # 3. 接收构建参数 (例如: apps/address)
 ARG APP_PATH
 # 编译 (生成二进制文件到 /app/server)
-RUN CGO_ENABLED=0 GOOS=linux go build -o /app/server ${APP_PATH}/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -o /app/server ./${APP_PATH}/main.go
 
 # --------------------------------------------------------------------------------
 # Run Stage
@@ -39,7 +39,7 @@ COPY ${APP_PATH}/config.yaml .
 # 8080: Gateway
 # 50051: User, 50052: Product, 50053: Cart, 50054: Order, 50055: Payment
 # [新增] 50056: Address
-EXPOSE 8080 50051 50052 50053 50054 50055 50056
+EXPOSE 8080 50051 50052 50053 50054 50055 50056 50057 50058
 
 # 4. 启动服务
 CMD ["./server"]

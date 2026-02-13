@@ -13,6 +13,7 @@ import (
 	"go-ecommerce/pkg/response"
 	"go-ecommerce/pkg/tracer"
 	"go-ecommerce/proto/address"
+	"go-ecommerce/proto/admin"
 	"go-ecommerce/proto/cart"
 	"go-ecommerce/proto/order"
 	"go-ecommerce/proto/payment"
@@ -117,6 +118,10 @@ func main() {
 		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy": "round_robin"}`), // 轮询负载均衡
 		grpc.WithUnaryInterceptor(otelgrpc.UnaryClientInterceptor()),            // 添加 OTEL 拦截器：自动把 Trace ID 注入到 gRPC Metadata 中传给下游
 	}
+
+	// 连接 Admin Service
+	adminConn, _ := grpc.Dial(fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "admin-service"), connOpts...)
+	adminClient := admin.NewAdminServiceClient(adminConn)
 
 	// 连接 User Service
 	userConn, _ := grpc.Dial(fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "user-service"), connOpts...)
@@ -620,6 +625,105 @@ func main() {
 					return
 				}
 				response.Success(c, resp)
+			})
+		}
+
+		adminGroup := authed.Group("/admin")
+		{
+			// 仪表盘统计
+			adminGroup.GET("/stats", func(ctx *gin.Context) {
+				resp, err := adminClient.GetDashboardStats(ctx.Request.Context(), &admin.StatsRequest{})
+				if err != nil {
+					response.Error(ctx, 500, err.Error())
+					return
+				}
+				response.Success(ctx, resp)
+			})
+
+			// 用户管理列表
+			adminGroup.GET("/users", func(ctx *gin.Context) {
+				page, _ := strconv.Atoi(ctx.DefaultQuery("page", "1"))
+				pageSize, _ := strconv.Atoi(ctx.DefaultQuery("page_size", "10"))
+				resp, err := adminClient.ListUsers(ctx.Request.Context(), &admin.ListUsersRequest{
+					Page: int32(page), PageSize: int32(pageSize),
+				})
+				if err != nil {
+					response.Error(ctx, 500, err.Error())
+					return
+				}
+				response.Success(ctx, resp)
+			})
+
+			// 禁用/启用用户
+			adminGroup.POST("/user/toggle", func(ctx *gin.Context) {
+				// 修正后的结构体：字段之间需要换行，Tag 格式必须正确
+				var req struct {
+					UserId   int64 `json:"user_id"`
+					Disabled bool  `json:"disabled"`
+				}
+
+				if err := ctx.ShouldBindJSON(&req); err != nil {
+					response.Error(ctx, 400, "参数错误: "+err.Error())
+					return
+				}
+
+				// 调用 adminClient
+				resp, err := adminClient.ToggleUserStatus(ctx.Request.Context(), &admin.ToggleStatusRequest{
+					UserId:   req.UserId,
+					Disabled: req.Disabled,
+				})
+
+				if err != nil {
+					response.Error(ctx, 500, err.Error())
+					return
+				}
+				response.Success(ctx, resp)
+			})
+
+			// 商品管理列表
+			adminGroup.GET("/products", func(ctx *gin.Context) {
+				page, _ := strconv.Atoi(ctx.DefaultQuery("page", "1"))
+				pageSize, _ := strconv.Atoi(ctx.DefaultQuery("page_size", "10"))
+				resp, err := adminClient.ListAllProducts(ctx, &admin.ListAllProductsRequest{
+					Page: int32(page), PageSize: int32(pageSize),
+				})
+				if err != nil {
+					response.Error(ctx, 500, err.Error())
+					return
+				}
+				response.Success(ctx, resp)
+			})
+
+			// 更新商品库存/价格
+			adminGroup.POST("/product/update", func(ctx *gin.Context) {
+				var req admin.UpdateProductRequest
+				if err := ctx.ShouldBindJSON(&req); err != nil {
+					response.Error(ctx, 400, "参数错误")
+					return
+				}
+				resp, err := adminClient.UpdateProduct(ctx, &req)
+				if err != nil {
+					response.Error(ctx, 500, err.Error())
+					return
+				}
+				response.Success(ctx, resp)
+			})
+
+			// 订单发货
+			adminGroup.POST("/order/ship", func(ctx *gin.Context) {
+				var req struct {
+					OrderNo string `json:"order_no"`
+				}
+				if err := ctx.ShouldBindJSON(&req); err != nil {
+					response.Error(ctx, 400, "参数错误")
+					return
+				}
+				resp, err := adminClient.ShipOrder(ctx, &admin.ShipOrderRequest{OrderNo: req.OrderNo})
+				if err != nil {
+					response.Error(ctx, 500, err.Error())
+					return
+				}
+				response.Success(ctx, resp)
 			})
 		}
 	}

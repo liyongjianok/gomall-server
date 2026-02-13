@@ -1,0 +1,13 @@
+service:
+  name: "admin-service"
+  port: 50058
+
+mysql:
+  host: "mysql"
+  port: 3306
+  user: "root"
+  password: "root"
+  dbname: "db_user" # 这里填一个默认的，代码中会动态切换
+
+consul:
+  address: "consul:8500"
