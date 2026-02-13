@@ -10,6 +10,7 @@ service AddressService {
   rpc GetAddress(GetAddressRequest) returns (GetAddressResponse);
   rpc UpdateAddress(UpdateAddressRequest) returns (UpdateAddressResponse);
   rpc DeleteAddress(DeleteAddressRequest) returns (DeleteAddressResponse);
+  rpc SetDefaultAddress(SetDefaultAddressRequest) returns (SetDefaultAddressResponse);
 }
 
 // AddressInfo
@@ -76,5 +77,14 @@ message DeleteAddressRequest {
 }
 
 message DeleteAddressResponse {
+  bool success = 1;
+}
+
+message SetDefaultAddressRequest {
+  int64 address_id = 1;
+  int64 user_id = 2;
+}
+
+message SetDefaultAddressResponse {
   bool success = 1;
 }
