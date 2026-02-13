@@ -631,7 +631,8 @@ func main() {
 		adminGroup := authed.Group("/admin")
 		{
 			// 仪表盘统计
-			adminGroup.GET("/stats", func(ctx *gin.Context) {
+			adminGroup.GET("/dashboard/stats", func(ctx *gin.Context) {
+				// 调用 admin-service 的 GetDashboardStats 接口
 				resp, err := adminClient.GetDashboardStats(ctx.Request.Context(), &admin.StatsRequest{})
 				if err != nil {
 					response.Error(ctx, 500, err.Error())

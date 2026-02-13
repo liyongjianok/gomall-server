@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"go-ecommerce/pkg/config"
 	"go-ecommerce/pkg/database"
@@ -27,43 +28,78 @@ type server struct {
 	dbOrder   *gorm.DB
 }
 
-// --- 核心业务实现 ---
-
 func (s *server) GetDashboardStats(ctx context.Context, req *admin.StatsRequest) (*admin.StatsResponse, error) {
 	var sales float64
 	var oCount, uCount, pCount int64
-	s.dbOrder.Table("orders").Where("status = ?", 1).Select("SUM(total_amount)").Row().Scan(&sales)
+
+	// 1. 总销售额：统计所有已支付（status >= 1）的订单额
+	// 原来是 status >= 2，导致刚支付的单子没算进去
+	s.dbOrder.Table("orders").Where("status >= ?", 1).Select("SUM(total_amount)").Row().Scan(&sales)
+
+	// 2. 订单总数
 	s.dbOrder.Table("orders").Count(&oCount)
+
+	// 3. 用户与产品总数
 	s.dbUser.Table("users").Count(&uCount)
 	s.dbProduct.Table("products").Count(&pCount)
+
+	// 4. 统计品类分布
+	var catStats []*admin.CategoryStat
+	s.dbProduct.Table("products").
+		Select("category as name, count(*) as value").
+		Group("category").
+		Scan(&catStats)
+
+	// 5. 统计最近7天趋势：同样修改为 status >= 1
+	var trendStats []*admin.TrendStat
+	s.dbOrder.Table("orders").
+		Select("DATE_FORMAT(created_at, '%m-%d') as date, SUM(total_amount) as amount").
+		Where("created_at > ?", time.Now().AddDate(0, 0, -7)).
+		Where("status >= ?", 1). // 只要支付了就算进销售额曲线
+		Group("date").
+		Order("date asc").
+		Scan(&trendStats)
+
 	return &admin.StatsResponse{
-		TotalSales: float32(sales), OrderCount: int32(oCount),
-		UserCount: int32(uCount), ProductCount: int32(pCount),
+		TotalSales:    float32(sales),
+		OrderCount:    int32(oCount),
+		UserCount:     int32(uCount),
+		ProductCount:  int32(pCount),
+		CategoryStats: catStats,
+		SalesTrend:    trendStats,
 	}, nil
 }
-
 func (s *server) ListUsers(ctx context.Context, req *admin.ListUsersRequest) (*admin.ListUsersResponse, error) {
 	var users []struct {
-		ID                                          int64
-		Username, Nickname, Mobile, Role, CreatedAt string
-		IsDisabled                                  bool
+		ID         int64
+		Username   string
+		Nickname   string
+		Mobile     string
+		Role       string
+		CreatedAt  time.Time
+		IsDisabled bool
 	}
 	var total int64
 	s.dbUser.Table("users").Count(&total)
 	s.dbUser.Table("users").Limit(int(req.PageSize)).Offset(int((req.Page - 1) * req.PageSize)).Find(&users)
+
 	var res []*admin.UserInfo
 	for _, u := range users {
 		res = append(res, &admin.UserInfo{
-			Id: u.ID, Username: u.Username, Nickname: u.Nickname,
-			Mobile: u.Mobile, Role: u.Role, IsDisabled: u.IsDisabled, CreatedAt: u.CreatedAt,
+			Id:         u.ID,
+			Username:   u.Username,
+			Nickname:   u.Nickname,
+			Mobile:     u.Mobile,
+			Role:       u.Role,
+			IsDisabled: u.IsDisabled,
+			CreatedAt:  u.CreatedAt.Format("2006-01-02 15:04:05"),
 		})
 	}
 	return &admin.ListUsersResponse{Users: res, Total: int32(total)}, nil
 }
 
 func (s *server) DeleteUser(ctx context.Context, req *admin.DeleteUserRequest) (*admin.DeleteUserResponse, error) {
-	// 管理员操作，直接从库中删除（或者你可以改为软删除）
-	err := s.dbUser.Table("users").Delete(&struct{ ID int64 }{ID: req.UserId}).Error
+	err := s.dbUser.Table("users").Where("id = ?", req.UserId).Delete(nil).Error
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "删除用户失败: %v", err)
 	}
@@ -85,6 +121,7 @@ func (s *server) ListAllProducts(ctx context.Context, req *admin.ListAllProducts
 	var total int64
 	s.dbProduct.Table("products").Count(&total)
 	s.dbProduct.Table("products").Limit(int(req.PageSize)).Offset(int((req.Page - 1) * req.PageSize)).Find(&prods)
+
 	var res []*admin.AdminProductInfo
 	for _, p := range prods {
 		res = append(res, &admin.AdminProductInfo{Id: p.ID, Name: p.Name, Price: p.Price, Stock: p.Stock})
@@ -94,7 +131,8 @@ func (s *server) ListAllProducts(ctx context.Context, req *admin.ListAllProducts
 
 func (s *server) UpdateProduct(ctx context.Context, req *admin.UpdateProductRequest) (*admin.UpdateProductResponse, error) {
 	err := s.dbProduct.Table("products").Where("id = ?", req.Id).Updates(map[string]interface{}{
-		"price": req.Price, "stock": req.Stock,
+		"price": req.Price,
+		"stock": req.Stock,
 	}).Error
 	return &admin.UpdateProductResponse{Success: err == nil}, err
 }
@@ -110,9 +148,6 @@ func main() {
 		log.Fatalf("加载配置失败: %v", err)
 	}
 
-	// 根据配置初始化三个数据库连接
-	// 这里的 pkg/database.InitMySQL 应支持传入不同的库名，或者我们手动构建 DSN
-	// 简单起见，我们基于 c.Mysql 基础配置构建不同库的连接
 	connect := func(dbName string) *gorm.DB {
 		baseCfg := c.Mysql
 		baseCfg.DbName = dbName
@@ -136,7 +171,6 @@ func main() {
 	admin.RegisterAdminServiceServer(s, &server{dbUser: dbU, dbProduct: dbP, dbOrder: dbO})
 	reflection.Register(s)
 
-	// 注册到 Consul
 	consulAddr := os.Getenv("CONSUL_ADDRESS")
 	if consulAddr == "" {
 		consulAddr = c.Consul.Address

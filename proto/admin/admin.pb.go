@@ -64,6 +64,8 @@ type StatsResponse struct {
 	OrderCount    int32                  `protobuf:"varint,2,opt,name=order_count,json=orderCount,proto3" json:"order_count,omitempty"`
 	UserCount     int32                  `protobuf:"varint,3,opt,name=user_count,json=userCount,proto3" json:"user_count,omitempty"`
 	ProductCount  int32                  `protobuf:"varint,4,opt,name=product_count,json=productCount,proto3" json:"product_count,omitempty"`
+	CategoryStats []*CategoryStat        `protobuf:"bytes,5,rep,name=category_stats,json=categoryStats,proto3" json:"category_stats,omitempty"` // 品类占比
+	SalesTrend    []*TrendStat           `protobuf:"bytes,6,rep,name=sales_trend,json=salesTrend,proto3" json:"sales_trend,omitempty"`          // 销售趋势
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -124,6 +126,20 @@ func (x *StatsResponse) GetProductCount() int32 {
 		return x.ProductCount
 	}
 	return 0
+}
+
+func (x *StatsResponse) GetCategoryStats() []*CategoryStat {
+	if x != nil {
+		return x.CategoryStats
+	}
+	return nil
+}
+
+func (x *StatsResponse) GetSalesTrend() []*TrendStat {
+	if x != nil {
+		return x.SalesTrend
+	}
+	return nil
 }
 
 type ListUsersRequest struct {
@@ -870,12 +886,116 @@ func (x *ShipOrderResponse) GetSuccess() bool {
 	return false
 }
 
+type CategoryStat struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Value         int32                  `protobuf:"varint,2,opt,name=value,proto3" json:"value,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CategoryStat) Reset() {
+	*x = CategoryStat{}
+	mi := &file_proto_admin_admin_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CategoryStat) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CategoryStat) ProtoMessage() {}
+
+func (x *CategoryStat) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_admin_admin_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CategoryStat.ProtoReflect.Descriptor instead.
+func (*CategoryStat) Descriptor() ([]byte, []int) {
+	return file_proto_admin_admin_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *CategoryStat) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *CategoryStat) GetValue() int32 {
+	if x != nil {
+		return x.Value
+	}
+	return 0
+}
+
+type TrendStat struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Date          string                 `protobuf:"bytes,1,opt,name=date,proto3" json:"date,omitempty"`
+	Amount        float32                `protobuf:"fixed32,2,opt,name=amount,proto3" json:"amount,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TrendStat) Reset() {
+	*x = TrendStat{}
+	mi := &file_proto_admin_admin_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TrendStat) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TrendStat) ProtoMessage() {}
+
+func (x *TrendStat) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_admin_admin_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TrendStat.ProtoReflect.Descriptor instead.
+func (*TrendStat) Descriptor() ([]byte, []int) {
+	return file_proto_admin_admin_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *TrendStat) GetDate() string {
+	if x != nil {
+		return x.Date
+	}
+	return ""
+}
+
+func (x *TrendStat) GetAmount() float32 {
+	if x != nil {
+		return x.Amount
+	}
+	return 0
+}
+
 var File_proto_admin_admin_proto protoreflect.FileDescriptor
 
 const file_proto_admin_admin_proto_rawDesc = "" +
 	"\n" +
 	"\x17proto/admin/admin.proto\x12\x05admin\"\x0e\n" +
-	"\fStatsRequest\"\x95\x01\n" +
+	"\fStatsRequest\"\x84\x02\n" +
 	"\rStatsResponse\x12\x1f\n" +
 	"\vtotal_sales\x18\x01 \x01(\x02R\n" +
 	"totalSales\x12\x1f\n" +
@@ -883,7 +1003,10 @@ const file_proto_admin_admin_proto_rawDesc = "" +
 	"orderCount\x12\x1d\n" +
 	"\n" +
 	"user_count\x18\x03 \x01(\x05R\tuserCount\x12#\n" +
-	"\rproduct_count\x18\x04 \x01(\x05R\fproductCount\"C\n" +
+	"\rproduct_count\x18\x04 \x01(\x05R\fproductCount\x12:\n" +
+	"\x0ecategory_stats\x18\x05 \x03(\v2\x13.admin.CategoryStatR\rcategoryStats\x121\n" +
+	"\vsales_trend\x18\x06 \x03(\v2\x10.admin.TrendStatR\n" +
+	"salesTrend\"C\n" +
 	"\x10ListUsersRequest\x12\x12\n" +
 	"\x04page\x18\x01 \x01(\x05R\x04page\x12\x1b\n" +
 	"\tpage_size\x18\x02 \x01(\x05R\bpageSize\"\xbe\x01\n" +
@@ -929,7 +1052,13 @@ const file_proto_admin_admin_proto_rawDesc = "" +
 	"\x10ShipOrderRequest\x12\x19\n" +
 	"\border_no\x18\x01 \x01(\tR\aorderNo\"-\n" +
 	"\x11ShipOrderResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess2\xfc\x03\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"8\n" +
+	"\fCategoryStat\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x05R\x05value\"7\n" +
+	"\tTrendStat\x12\x12\n" +
+	"\x04date\x18\x01 \x01(\tR\x04date\x12\x16\n" +
+	"\x06amount\x18\x02 \x01(\x02R\x06amount2\xfc\x03\n" +
 	"\fAdminService\x12>\n" +
 	"\x11GetDashboardStats\x12\x13.admin.StatsRequest\x1a\x14.admin.StatsResponse\x12>\n" +
 	"\tListUsers\x12\x17.admin.ListUsersRequest\x1a\x18.admin.ListUsersResponse\x12K\n" +
@@ -952,7 +1081,7 @@ func file_proto_admin_admin_proto_rawDescGZIP() []byte {
 	return file_proto_admin_admin_proto_rawDescData
 }
 
-var file_proto_admin_admin_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
+var file_proto_admin_admin_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
 var file_proto_admin_admin_proto_goTypes = []any{
 	(*StatsRequest)(nil),            // 0: admin.StatsRequest
 	(*StatsResponse)(nil),           // 1: admin.StatsResponse
@@ -970,29 +1099,33 @@ var file_proto_admin_admin_proto_goTypes = []any{
 	(*UpdateProductResponse)(nil),   // 13: admin.UpdateProductResponse
 	(*ShipOrderRequest)(nil),        // 14: admin.ShipOrderRequest
 	(*ShipOrderResponse)(nil),       // 15: admin.ShipOrderResponse
+	(*CategoryStat)(nil),            // 16: admin.CategoryStat
+	(*TrendStat)(nil),               // 17: admin.TrendStat
 }
 var file_proto_admin_admin_proto_depIdxs = []int32{
-	3,  // 0: admin.ListUsersResponse.users:type_name -> admin.UserInfo
-	10, // 1: admin.ListAllProductsResponse.products:type_name -> admin.AdminProductInfo
-	0,  // 2: admin.AdminService.GetDashboardStats:input_type -> admin.StatsRequest
-	2,  // 3: admin.AdminService.ListUsers:input_type -> admin.ListUsersRequest
-	5,  // 4: admin.AdminService.ToggleUserStatus:input_type -> admin.ToggleStatusRequest
-	7,  // 5: admin.AdminService.DeleteUser:input_type -> admin.DeleteUserRequest
-	9,  // 6: admin.AdminService.ListAllProducts:input_type -> admin.ListAllProductsRequest
-	12, // 7: admin.AdminService.UpdateProduct:input_type -> admin.UpdateProductRequest
-	14, // 8: admin.AdminService.ShipOrder:input_type -> admin.ShipOrderRequest
-	1,  // 9: admin.AdminService.GetDashboardStats:output_type -> admin.StatsResponse
-	4,  // 10: admin.AdminService.ListUsers:output_type -> admin.ListUsersResponse
-	6,  // 11: admin.AdminService.ToggleUserStatus:output_type -> admin.ToggleStatusResponse
-	8,  // 12: admin.AdminService.DeleteUser:output_type -> admin.DeleteUserResponse
-	11, // 13: admin.AdminService.ListAllProducts:output_type -> admin.ListAllProductsResponse
-	13, // 14: admin.AdminService.UpdateProduct:output_type -> admin.UpdateProductResponse
-	15, // 15: admin.AdminService.ShipOrder:output_type -> admin.ShipOrderResponse
-	9,  // [9:16] is the sub-list for method output_type
-	2,  // [2:9] is the sub-list for method input_type
-	2,  // [2:2] is the sub-list for extension type_name
-	2,  // [2:2] is the sub-list for extension extendee
-	0,  // [0:2] is the sub-list for field type_name
+	16, // 0: admin.StatsResponse.category_stats:type_name -> admin.CategoryStat
+	17, // 1: admin.StatsResponse.sales_trend:type_name -> admin.TrendStat
+	3,  // 2: admin.ListUsersResponse.users:type_name -> admin.UserInfo
+	10, // 3: admin.ListAllProductsResponse.products:type_name -> admin.AdminProductInfo
+	0,  // 4: admin.AdminService.GetDashboardStats:input_type -> admin.StatsRequest
+	2,  // 5: admin.AdminService.ListUsers:input_type -> admin.ListUsersRequest
+	5,  // 6: admin.AdminService.ToggleUserStatus:input_type -> admin.ToggleStatusRequest
+	7,  // 7: admin.AdminService.DeleteUser:input_type -> admin.DeleteUserRequest
+	9,  // 8: admin.AdminService.ListAllProducts:input_type -> admin.ListAllProductsRequest
+	12, // 9: admin.AdminService.UpdateProduct:input_type -> admin.UpdateProductRequest
+	14, // 10: admin.AdminService.ShipOrder:input_type -> admin.ShipOrderRequest
+	1,  // 11: admin.AdminService.GetDashboardStats:output_type -> admin.StatsResponse
+	4,  // 12: admin.AdminService.ListUsers:output_type -> admin.ListUsersResponse
+	6,  // 13: admin.AdminService.ToggleUserStatus:output_type -> admin.ToggleStatusResponse
+	8,  // 14: admin.AdminService.DeleteUser:output_type -> admin.DeleteUserResponse
+	11, // 15: admin.AdminService.ListAllProducts:output_type -> admin.ListAllProductsResponse
+	13, // 16: admin.AdminService.UpdateProduct:output_type -> admin.UpdateProductResponse
+	15, // 17: admin.AdminService.ShipOrder:output_type -> admin.ShipOrderResponse
+	11, // [11:18] is the sub-list for method output_type
+	4,  // [4:11] is the sub-list for method input_type
+	4,  // [4:4] is the sub-list for extension type_name
+	4,  // [4:4] is the sub-list for extension extendee
+	0,  // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_proto_admin_admin_proto_init() }
@@ -1006,7 +1139,7 @@ func file_proto_admin_admin_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_admin_admin_proto_rawDesc), len(file_proto_admin_admin_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   16,
+			NumMessages:   18,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
