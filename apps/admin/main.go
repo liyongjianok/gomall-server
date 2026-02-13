@@ -29,17 +29,17 @@ type server struct {
 }
 
 func (s *server) GetDashboardStats(ctx context.Context, req *admin.StatsRequest) (*admin.StatsResponse, error) {
-	var sales float64
+	var totalSales, actualSales float64
 	var oCount, uCount, pCount int64
 
-	// 1. 总销售额：统计所有已支付（status >= 1）的订单额
-	// 原来是 status >= 2，导致刚支付的单子没算进去
-	s.dbOrder.Table("orders").Where("status >= ?", 1).Select("SUM(total_amount)").Row().Scan(&sales)
+	// 1. 总订单金额 (GMV)：不管什么状态，所有产生的订单总额
+	s.dbOrder.Table("orders").Select("COALESCE(SUM(total_amount), 0)").Row().Scan(&totalSales)
 
-	// 2. 订单总数
+	// 2. 实际成交额：只有状态 status >= 1 (已支付) 的订单额
+	s.dbOrder.Table("orders").Where("status = ?", 1).Select("COALESCE(SUM(total_amount), 0)").Row().Scan(&actualSales)
+
+	// 3. 基础计数
 	s.dbOrder.Table("orders").Count(&oCount)
-
-	// 3. 用户与产品总数
 	s.dbUser.Table("users").Count(&uCount)
 	s.dbProduct.Table("products").Count(&pCount)
 
@@ -50,18 +50,19 @@ func (s *server) GetDashboardStats(ctx context.Context, req *admin.StatsRequest)
 		Group("category").
 		Scan(&catStats)
 
-	// 5. 统计最近7天趋势：同样修改为 status >= 1
+	// 5. 统计销售趋势 (以实际成交为准)
 	var trendStats []*admin.TrendStat
 	s.dbOrder.Table("orders").
 		Select("DATE_FORMAT(created_at, '%m-%d') as date, SUM(total_amount) as amount").
 		Where("created_at > ?", time.Now().AddDate(0, 0, -7)).
-		Where("status >= ?", 1). // 只要支付了就算进销售额曲线
+		Where("status >= ?", 1).
 		Group("date").
 		Order("date asc").
 		Scan(&trendStats)
 
 	return &admin.StatsResponse{
-		TotalSales:    float32(sales),
+		TotalSales:    float32(totalSales),
+		ActualSales:   float32(actualSales), // 🔥 返回新字段
 		OrderCount:    int32(oCount),
 		UserCount:     int32(uCount),
 		ProductCount:  int32(pCount),
@@ -69,6 +70,7 @@ func (s *server) GetDashboardStats(ctx context.Context, req *admin.StatsRequest)
 		SalesTrend:    trendStats,
 	}, nil
 }
+
 func (s *server) ListUsers(ctx context.Context, req *admin.ListUsersRequest) (*admin.ListUsersResponse, error) {
 	var users []struct {
 		ID         int64

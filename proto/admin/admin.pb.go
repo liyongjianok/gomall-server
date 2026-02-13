@@ -66,6 +66,7 @@ type StatsResponse struct {
 	ProductCount  int32                  `protobuf:"varint,4,opt,name=product_count,json=productCount,proto3" json:"product_count,omitempty"`
 	CategoryStats []*CategoryStat        `protobuf:"bytes,5,rep,name=category_stats,json=categoryStats,proto3" json:"category_stats,omitempty"` // 品类占比
 	SalesTrend    []*TrendStat           `protobuf:"bytes,6,rep,name=sales_trend,json=salesTrend,proto3" json:"sales_trend,omitempty"`          // 销售趋势
+	ActualSales   float32                `protobuf:"fixed32,7,opt,name=actual_sales,json=actualSales,proto3" json:"actual_sales,omitempty"`     // 实际成交额 (已支付)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -140,6 +141,13 @@ func (x *StatsResponse) GetSalesTrend() []*TrendStat {
 		return x.SalesTrend
 	}
 	return nil
+}
+
+func (x *StatsResponse) GetActualSales() float32 {
+	if x != nil {
+		return x.ActualSales
+	}
+	return 0
 }
 
 type ListUsersRequest struct {
@@ -995,7 +1003,7 @@ var File_proto_admin_admin_proto protoreflect.FileDescriptor
 const file_proto_admin_admin_proto_rawDesc = "" +
 	"\n" +
 	"\x17proto/admin/admin.proto\x12\x05admin\"\x0e\n" +
-	"\fStatsRequest\"\x84\x02\n" +
+	"\fStatsRequest\"\xa7\x02\n" +
 	"\rStatsResponse\x12\x1f\n" +
 	"\vtotal_sales\x18\x01 \x01(\x02R\n" +
 	"totalSales\x12\x1f\n" +
@@ -1006,7 +1014,8 @@ const file_proto_admin_admin_proto_rawDesc = "" +
 	"\rproduct_count\x18\x04 \x01(\x05R\fproductCount\x12:\n" +
 	"\x0ecategory_stats\x18\x05 \x03(\v2\x13.admin.CategoryStatR\rcategoryStats\x121\n" +
 	"\vsales_trend\x18\x06 \x03(\v2\x10.admin.TrendStatR\n" +
-	"salesTrend\"C\n" +
+	"salesTrend\x12!\n" +
+	"\factual_sales\x18\a \x01(\x02R\vactualSales\"C\n" +
 	"\x10ListUsersRequest\x12\x12\n" +
 	"\x04page\x18\x01 \x01(\x05R\x04page\x12\x1b\n" +
 	"\tpage_size\x18\x02 \x01(\x05R\bpageSize\"\xbe\x01\n" +

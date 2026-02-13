@@ -29,6 +29,7 @@ message StatsResponse {
   int32 product_count = 4;
   repeated CategoryStat category_stats = 5; // 品类占比
   repeated TrendStat sales_trend = 6;       // 销售趋势
+  float actual_sales = 7; // 实际成交额 (已支付)
 }
 
 message ListUsersRequest {
