@@ -14,7 +14,9 @@ service AdminService {
   // --- 商品管理 ---
   rpc ListAllProducts(ListAllProductsRequest) returns (ListAllProductsResponse);
   rpc UpdateProduct(UpdateProductRequest) returns (UpdateProductResponse);
-  
+  rpc DeleteProduct(DeleteProductRequest) returns (DeleteProductResponse); // 新增：删除/下架商品
+  rpc BatchUpdatePrice(BatchPriceRequest) returns (BatchPriceResponse);    // 新增：批量调价
+
   // --- 订单管理 ---
   rpc ShipOrder(ShipOrderRequest) returns (ShipOrderResponse);
 }
@@ -56,16 +58,10 @@ message ToggleStatusRequest {
   int64 user_id = 1;
   bool disabled = 2;
 }
-
 message ToggleStatusResponse { bool success = 1; }
 
-message DeleteUserRequest {
-  int64 user_id = 1;
-}
-
-message DeleteUserResponse {
-  bool success = 1;
-}
+message DeleteUserRequest { int64 user_id = 1; }
+message DeleteUserResponse { bool success = 1; }
 
 message ListAllProductsRequest {
   int32 page = 1;
@@ -77,6 +73,7 @@ message AdminProductInfo {
   string name = 2;
   float price = 3;
   int32 stock = 4;
+  string picture = 5; // 新增：图片地址显示
 }
 
 message ListAllProductsResponse {
@@ -86,11 +83,20 @@ message ListAllProductsResponse {
 
 message UpdateProductRequest {
   int64 id = 1;
-  float price = 2;
-  int32 stock = 3;
+  string name = 2; // 新增：支持改名
+  float price = 3;
+  int32 stock = 4;
 }
-
 message UpdateProductResponse { bool success = 1; }
+
+message DeleteProductRequest { int64 id = 1; }
+message DeleteProductResponse { bool success = 1; }
+
+message BatchPriceRequest {
+  string category = 1;
+  float ratio = 2;
+}
+message BatchPriceResponse { bool success = 1; }
 
 message ShipOrderRequest { string order_no = 1; }
 message ShipOrderResponse { bool success = 1; }

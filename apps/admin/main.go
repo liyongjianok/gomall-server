@@ -15,9 +15,7 @@ import (
 	"go-ecommerce/proto/admin"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/reflection"
-	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
 )
 
@@ -28,6 +26,7 @@ type server struct {
 	dbOrder   *gorm.DB
 }
 
+// --- 数据大屏统计 ---
 func (s *server) GetDashboardStats(ctx context.Context, req *admin.StatsRequest) (*admin.StatsResponse, error) {
 	var totalSales, actualSales float64
 	var oCount, uCount, pCount int64
@@ -45,10 +44,7 @@ func (s *server) GetDashboardStats(ctx context.Context, req *admin.StatsRequest)
 
 	// 4. 统计品类分布
 	var catStats []*admin.CategoryStat
-	s.dbProduct.Table("products").
-		Select("category as name, count(*) as value").
-		Group("category").
-		Scan(&catStats)
+	s.dbProduct.Table("products").Select("category as name, count(*) as value").Group("category").Scan(&catStats)
 
 	// 5. 统计销售趋势 (以实际成交为准)
 	var trendStats []*admin.TrendStat
@@ -56,13 +52,11 @@ func (s *server) GetDashboardStats(ctx context.Context, req *admin.StatsRequest)
 		Select("DATE_FORMAT(created_at, '%m-%d') as date, SUM(total_amount) as amount").
 		Where("created_at > ?", time.Now().AddDate(0, 0, -7)).
 		Where("status >= ?", 1).
-		Group("date").
-		Order("date asc").
-		Scan(&trendStats)
+		Group("date").Order("date asc").Scan(&trendStats)
 
 	return &admin.StatsResponse{
 		TotalSales:    float32(totalSales),
-		ActualSales:   float32(actualSales), // 🔥 返回新字段
+		ActualSales:   float32(actualSales),
 		OrderCount:    int32(oCount),
 		UserCount:     int32(uCount),
 		ProductCount:  int32(pCount),
@@ -71,6 +65,7 @@ func (s *server) GetDashboardStats(ctx context.Context, req *admin.StatsRequest)
 	}, nil
 }
 
+// --- 用户管理 ---
 func (s *server) ListUsers(ctx context.Context, req *admin.ListUsersRequest) (*admin.ListUsersResponse, error) {
 	var users []struct {
 		ID         int64
@@ -102,10 +97,7 @@ func (s *server) ListUsers(ctx context.Context, req *admin.ListUsersRequest) (*a
 
 func (s *server) DeleteUser(ctx context.Context, req *admin.DeleteUserRequest) (*admin.DeleteUserResponse, error) {
 	err := s.dbUser.Table("users").Where("id = ?", req.UserId).Delete(nil).Error
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "删除用户失败: %v", err)
-	}
-	return &admin.DeleteUserResponse{Success: true}, nil
+	return &admin.DeleteUserResponse{Success: err == nil}, err
 }
 
 func (s *server) ToggleUserStatus(ctx context.Context, req *admin.ToggleStatusRequest) (*admin.ToggleStatusResponse, error) {
@@ -113,12 +105,14 @@ func (s *server) ToggleUserStatus(ctx context.Context, req *admin.ToggleStatusRe
 	return &admin.ToggleStatusResponse{Success: err == nil}, err
 }
 
+// --- 商品管理 ---
 func (s *server) ListAllProducts(ctx context.Context, req *admin.ListAllProductsRequest) (*admin.ListAllProductsResponse, error) {
 	var prods []struct {
-		ID    int64
-		Name  string
-		Price float32
-		Stock int32
+		ID      int64
+		Name    string
+		Price   float32
+		Stock   int32
+		Picture string
 	}
 	var total int64
 	s.dbProduct.Table("products").Count(&total)
@@ -126,19 +120,37 @@ func (s *server) ListAllProducts(ctx context.Context, req *admin.ListAllProducts
 
 	var res []*admin.AdminProductInfo
 	for _, p := range prods {
-		res = append(res, &admin.AdminProductInfo{Id: p.ID, Name: p.Name, Price: p.Price, Stock: p.Stock})
+		res = append(res, &admin.AdminProductInfo{Id: p.ID, Name: p.Name, Price: p.Price, Stock: p.Stock, Picture: p.Picture})
 	}
 	return &admin.ListAllProductsResponse{Products: res, Total: int32(total)}, nil
 }
 
 func (s *server) UpdateProduct(ctx context.Context, req *admin.UpdateProductRequest) (*admin.UpdateProductResponse, error) {
-	err := s.dbProduct.Table("products").Where("id = ?", req.Id).Updates(map[string]interface{}{
-		"price": req.Price,
-		"stock": req.Stock,
-	}).Error
+	updates := make(map[string]interface{})
+	if req.Name != "" {
+		updates["name"] = req.Name
+	}
+	updates["price"] = req.Price
+	updates["stock"] = req.Stock
+
+	err := s.dbProduct.Table("products").Where("id = ?", req.Id).Updates(updates).Error
 	return &admin.UpdateProductResponse{Success: err == nil}, err
 }
 
+func (s *server) DeleteProduct(ctx context.Context, req *admin.DeleteProductRequest) (*admin.DeleteProductResponse, error) {
+	err := s.dbProduct.Table("products").Where("id = ?", req.Id).Delete(nil).Error
+	return &admin.DeleteProductResponse{Success: err == nil}, err
+}
+
+func (s *server) BatchUpdatePrice(ctx context.Context, req *admin.BatchPriceRequest) (*admin.BatchPriceResponse, error) {
+	// GORM 表达式更新：price = price * ratio
+	err := s.dbProduct.Table("products").
+		Where("category = ?", req.Category).
+		Update("price", gorm.Expr("price * ?", req.Ratio)).Error
+	return &admin.BatchPriceResponse{Success: err == nil}, err
+}
+
+// --- 订单管理 ---
 func (s *server) ShipOrder(ctx context.Context, req *admin.ShipOrderRequest) (*admin.ShipOrderResponse, error) {
 	err := s.dbOrder.Table("orders").Where("order_no = ? AND status = 1", req.OrderNo).Update("status", 3).Error
 	return &admin.ShipOrderResponse{Success: err == nil}, err
