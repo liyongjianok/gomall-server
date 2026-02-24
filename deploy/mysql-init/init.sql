@@ -1,8 +1,8 @@
 /*
- * Go Mall 数据库全量初始化脚本 (精准优化版)
- * 1. 移除了未使用的 db_cart
- * 2. users 表保持结构完整，但不填充任何测试数据
- * 3. 商品列表 (products) 原始数据及 ID 完全保留，仅增加 category 字段以适配大屏
+ * Go Mall 数据库全量初始化脚本 (Shouguang Veggie - Final Stable Edition)
+ * 1. 移除了 db_cart，保持架构精简
+ * 2. users 表保持结构完整（含 role, is_disabled 字段），不填充测试数据
+ * 3. 商品列表 (products) 保留原有 ID 与核心数据，并固化分类 (category) 字段
  */
 
 SET NAMES utf8mb4;
@@ -69,7 +69,7 @@ CREATE TABLE `products` (
     `price` float(10, 2) NOT NULL,
     `stock` int(11) DEFAULT 1000,
     `category_id` int(11) DEFAULT '0',
-    `category` varchar(100) DEFAULT '其他' COMMENT '新增字段：用于大屏聚合显示分类名',
+    `category` varchar(100) DEFAULT '其他' COMMENT '分类名',
     PRIMARY KEY (`id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
@@ -77,7 +77,7 @@ CREATE TABLE `skus` (
     `id` bigint(20) NOT NULL AUTO_INCREMENT,
     `product_id` bigint(20) NOT NULL,
     `name` varchar(255) DEFAULT NULL,
-    `price` float(10, 2) DEFAULT NULL,
+    `price?` float(10, 2) DEFAULT NULL,
     `stock` int(11) DEFAULT 1000,
     `picture` varchar(255) DEFAULT NULL,
     `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
@@ -87,7 +87,7 @@ CREATE TABLE `skus` (
     KEY `idx_product_id` (`product_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
--- 插入 32 种寿光蔬菜水果
+-- 插入 32 种寿光蔬菜水果 (整合分类优化版)
 INSERT INTO
     `products` (
         `id`,
@@ -116,7 +116,7 @@ VALUES (
         'https://placehold.co/300x300/32cd32/ffffff?text=Cucumber',
         4.50,
         800,
-        1,
+        2,
         '瓜果类'
     ),
     (
@@ -126,7 +126,7 @@ VALUES (
         'https://placehold.co/300x300/ff4500/ffffff?text=Carrot',
         2.80,
         1000,
-        1,
+        3,
         '根茎类'
     ),
     (
@@ -136,7 +136,7 @@ VALUES (
         'https://placehold.co/300x300/006400/ffffff?text=Leek',
         6.50,
         300,
-        1,
+        4,
         '葱蒜类'
     ),
     (
@@ -156,7 +156,7 @@ VALUES (
         'https://placehold.co/300x300/90ee90/ffffff?text=Cabbage',
         1.50,
         2000,
-        1,
+        5,
         '叶菜类'
     ),
     (
@@ -166,7 +166,7 @@ VALUES (
         'https://placehold.co/300x300/f5f5f5/228b22?text=Scallion',
         3.20,
         1200,
-        1,
+        4,
         '葱蒜类'
     ),
     (
@@ -176,7 +176,7 @@ VALUES (
         'https://placehold.co/300x300/fffafa/a52a2a?text=Garlic',
         5.00,
         1500,
-        1,
+        4,
         '葱蒜类'
     ),
     (
@@ -206,7 +206,7 @@ VALUES (
         'https://placehold.co/300x300/98fb98/006400?text=Zucchini',
         2.50,
         900,
-        1,
+        2,
         '瓜果类'
     ),
     (
@@ -216,7 +216,7 @@ VALUES (
         'https://placehold.co/300x300/fffacd/8b4513?text=Melon',
         12.80,
         200,
-        2,
+        7,
         '水果类'
     ),
     (
@@ -226,47 +226,47 @@ VALUES (
         'https://placehold.co/300x300/e9967a/ffffff?text=Pumpkin',
         4.20,
         700,
-        1,
+        2,
         '瓜果类'
     ),
     (
         14,
         '西兰花',
-        '花球青翠紧致，健身餐常备',
+        '花球青翠紧致，健身常备',
         'https://placehold.co/300x300/228b22/ffffff?text=Broccoli',
         6.80,
         400,
-        1,
+        5,
         '叶菜类'
     ),
     (
         15,
         '荷兰土豆',
-        '表面光滑，口感粉糯，适合油炸炖煮',
+        '表面光滑，口感粉糯',
         'https://placehold.co/300x300/d2b48c/ffffff?text=Potato',
         2.20,
         3000,
-        1,
+        3,
         '根茎类'
     ),
     (
         16,
         '黑皮冬瓜',
-        '肉厚耐煮，清热解暑，煲汤良品',
+        '肉厚耐煮，清热解暑',
         'https://placehold.co/300x300/2f4f4f/ffffff?text=Melon',
         1.80,
         800,
-        1,
+        2,
         '瓜果类'
     ),
     (
         17,
         '苦瓜',
-        '清火解腻，大棚精品，品相极佳',
+        '清火解腻，大棚精品',
         'https://placehold.co/300x300/00ff00/006400?text=Bitter',
         4.80,
         300,
-        1,
+        2,
         '瓜果类'
     ),
     (
@@ -276,7 +276,7 @@ VALUES (
         'https://placehold.co/300x300/f5deb3/8b4513?text=Yam',
         9.50,
         400,
-        1,
+        3,
         '根茎类'
     ),
     (
@@ -286,7 +286,7 @@ VALUES (
         'https://placehold.co/300x300/ffffff/000000?text=Radish',
         1.20,
         2500,
-        1,
+        3,
         '根茎类'
     ),
     (
@@ -296,7 +296,7 @@ VALUES (
         'https://placehold.co/300x300/fff5ee/deb887?text=Mushroom',
         3.50,
         600,
-        1,
+        6,
         '菌菇类'
     ),
     (
@@ -306,7 +306,7 @@ VALUES (
         'https://placehold.co/300x300/dcdcdc/696969?text=Mushroom',
         5.50,
         400,
-        1,
+        6,
         '菌菇类'
     ),
     (
@@ -317,7 +317,7 @@ VALUES (
         8.00,
         300,
         1,
-        '水果类'
+        '茄果类'
     ),
     (
         23,
@@ -326,7 +326,7 @@ VALUES (
         'https://placehold.co/300x300/7cfc00/006400?text=Lettuce',
         4.00,
         500,
-        1,
+        5,
         '叶菜类'
     ),
     (
@@ -336,7 +336,7 @@ VALUES (
         'https://placehold.co/300x300/32cd32/ffffff?text=Leafy',
         3.00,
         600,
-        1,
+        5,
         '叶菜类'
     ),
     (
@@ -346,7 +346,7 @@ VALUES (
         'https://placehold.co/300x300/006400/ffffff?text=Asparagus',
         15.00,
         200,
-        1,
+        5,
         '叶菜类'
     ),
     (
@@ -366,7 +366,7 @@ VALUES (
         'https://placehold.co/300x300/fff8dc/8b4513?text=Lotus',
         5.20,
         600,
-        1,
+        3,
         '根茎类'
     ),
     (
@@ -376,7 +376,7 @@ VALUES (
         'https://placehold.co/300x300/556b2f/ffffff?text=Pumpkin',
         6.00,
         500,
-        1,
+        2,
         '瓜果类'
     ),
     (
@@ -386,7 +386,7 @@ VALUES (
         'https://placehold.co/300x300/8fbc8f/ffffff?text=Bean',
         5.60,
         400,
-        1,
+        8,
         '豆类'
     ),
     (
@@ -396,7 +396,7 @@ VALUES (
         'https://placehold.co/300x300/00ff7f/ffffff?text=Bean',
         6.20,
         400,
-        1,
+        8,
         '豆类'
     ),
     (
@@ -406,7 +406,7 @@ VALUES (
         'https://placehold.co/300x300/fffff0/bdb76b?text=Cabbage',
         4.50,
         1000,
-        1,
+        5,
         '叶菜类'
     ),
     (
@@ -416,7 +416,7 @@ VALUES (
         'https://placehold.co/300x300/cd853f/ffffff?text=Potato',
         3.50,
         2000,
-        1,
+        3,
         '根茎类'
     );
 
