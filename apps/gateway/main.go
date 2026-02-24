@@ -37,23 +37,23 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// Sentinel 限流资源名常量
+// Sentinel 限流资源名常量，用于秒杀接口的流量控制
 const ResSeckill = "seckill_api"
 
-// initSentinel 初始化 Sentinel 限流规则
+// initSentinel 初始化 Sentinel 流控组件并加载硬编码规则
 func initSentinel() {
 	err := sentinel.InitDefault()
 	if err != nil {
 		log.Fatalf("Sentinel 初始化失败: %v", err)
 	}
 
-	// 加载流控规则
+	// 加载流控规则：每秒最多允许 5 个请求进入秒杀接口
 	_, err = flow.LoadRules([]*flow.Rule{
 		{
 			Resource:               ResSeckill,  // 针对秒杀接口
 			TokenCalculateStrategy: flow.Direct, // 直接计数模式
 			ControlBehavior:        flow.Reject, // 超出阈值直接拒绝
-			Threshold:              5,           // [关键] QPS 限流阈值：每秒最多 5 个请求
+			Threshold:              5,           // QPS 限流阈值：每秒最多 5 个请求
 			StatIntervalInMs:       1000,        // 统计时间窗口：1秒
 		},
 	})
@@ -64,15 +64,13 @@ func initSentinel() {
 }
 
 func main() {
-	// ==========================================
-	// 1. 基础设施配置加载
-	// ==========================================
+	// 1. 加载系统配置
 	c, err := config.LoadConfig(".")
 	if err != nil {
 		log.Fatalf("加载配置失败: %v", err)
 	}
 
-	// 适配 Docker 环境变量 (用于覆盖配置文件)
+	// 适配 Docker 环境，优先从环境变量获取 Consul 地址和端口
 	if v := os.Getenv("CONSUL_ADDRESS"); v != "" {
 		c.Consul.Address = v
 	}
@@ -82,22 +80,16 @@ func main() {
 		}
 	}
 
-	// ==========================================
-	// 2. 初始化链路追踪 (Jaeger)
-	// ==========================================
-	// 默认 Jaeger 地址 (Docker 内网)，如果是本地调试需改为 localhost
+	// 2. 初始化全链路追踪 (Jaeger)
 	jaegerAddr := "jaeger:4318"
 	if v := os.Getenv("JAEGER_HOST"); v != "" {
 		jaegerAddr = v
 	}
-
-	// 调用我们封装的 tracer 包
 	tp, err := tracer.InitTracer("gateway", jaegerAddr)
 	if err != nil {
-		log.Printf("[Warning] 链路追踪初始化失败: %v", err)
+		log.Printf("[Warning] 追踪系统启动失败: %v", err)
 	} else {
 		log.Println("Jaeger 链路追踪已启动")
-		// 程序退出时关闭 Tracer，确保数据上传完毕
 		defer func() {
 			if err := tp.Shutdown(context.Background()); err != nil {
 				log.Printf("关闭 Tracer 失败: %v", err)
@@ -105,57 +97,30 @@ func main() {
 		}()
 	}
 
-	// ==========================================
-	// 3. 初始化 Sentinel 限流器
-	// ==========================================
+	// 3. 启动流量哨兵
 	initSentinel()
 
-	// ==========================================
-	// 4. 初始化 gRPC 客户端 (连接微服务)
-	// ==========================================
+	// 4. 初始化 gRPC 拨号配置 (包含 OTEL 追踪与轮询负载均衡)
 	connOpts := []grpc.DialOption{
-		grpc.WithTransportCredentials(insecure.NewCredentials()),                // 禁用 TLS (内网通信)
-		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy": "round_robin"}`), // 轮询负载均衡
-		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),                      // 添加 OTEL 拦截器：自动把 Trace ID 注入到 gRPC Metadata 中传给下游
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy": "round_robin"}`),
+		grpc.WithStatsHandler(otelgrpc.NewClientHandler()), // 关键：注入 Trace 上下文
 	}
 
-	// 连接 Admin Service
-	adminConn, _ := grpc.Dial(fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "admin-service"), connOpts...)
-	adminClient := admin.NewAdminServiceClient(adminConn)
-
-	// 连接 User Service
-	userConn, _ := grpc.Dial(fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "user-service"), connOpts...)
-	userClient := user.NewUserServiceClient(userConn)
-
-	// 连接 Product Service
-	prodConn, _ := grpc.Dial(fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "product-service"), connOpts...)
-	productClient := product.NewProductServiceClient(prodConn)
-
-	// 连接 Cart Service
-	cartConn, _ := grpc.Dial(fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "cart-service"), connOpts...)
-	cartClient := cart.NewCartServiceClient(cartConn)
-
-	// 连接 Order Service
-	orderConn, _ := grpc.Dial(fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "order-service"), connOpts...)
-	orderClient := order.NewOrderServiceClient(orderConn)
-
-	// 连接 Payment Service
-	payConn, _ := grpc.Dial(fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "payment-service"), connOpts...)
-	paymentClient := payment.NewPaymentServiceClient(payConn)
-
-	// 连接 Address Service
-	addrConn, err := grpc.Dial(fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "address-service"), connOpts...)
-	if err != nil {
-		log.Fatalf("连接地址服务失败: %v", err)
+	// 建立各微服务的拨号连接 (使用 Consul 服务发现)
+	dial := func(serviceName string) *grpc.ClientConn {
+		conn, _ := grpc.Dial(fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, serviceName), connOpts...)
+		return conn
 	}
-	addressClient := address.NewAddressServiceClient(addrConn)
 
-	// 连接 Review Service
-	reviewConn, err := grpc.Dial(fmt.Sprintf("consul://%s/%s?wait=14s", c.Consul.Address, "review-service"), connOpts...)
-	if err != nil {
-		log.Fatalf("连接评价服务失败: %v", err)
-	}
-	reviewClient := review.NewReviewServiceClient(reviewConn)
+	adminClient := admin.NewAdminServiceClient(dial("admin-service"))
+	userClient := user.NewUserServiceClient(dial("user-service"))
+	productClient := product.NewProductServiceClient(dial("product-service"))
+	cartClient := cart.NewCartServiceClient(dial("cart-service"))
+	orderClient := order.NewOrderServiceClient(dial("order-service"))
+	paymentClient := payment.NewPaymentServiceClient(dial("payment-service"))
+	addressClient := address.NewAddressServiceClient(dial("address-service"))
+	reviewClient := review.NewReviewServiceClient(dial("review-service"))
 
 	// ==========================================
 	// 5. 启动 HTTP 服务 (Gin)
@@ -190,16 +155,14 @@ func main() {
 			response.Success(ctx, resp)
 		})
 
-		// 用户注册
+		// 注册 (包含昵称字段透传)
 		v1.POST("/user/register", func(ctx *gin.Context) {
-			// 1. 在结构体中增加 Nickname 字段
 			var req struct {
 				Username string `json:"username" binding:"required"`
 				Password string `json:"password" binding:"required"`
 				Mobile   string `json:"mobile"`
-				Nickname string `json:"nickname"` // 接收前端传来的昵称
+				Nickname string `json:"nickname"`
 			}
-
 			if err := ctx.ShouldBindJSON(&req); err != nil {
 				response.Error(ctx, http.StatusBadRequest, err.Error())
 				return
@@ -208,12 +171,8 @@ func main() {
 			// 2. 在调用 gRPC 客户端时，将 Nickname 传递给下游的 user-service
 			// 注意：请确保你的 user.RegisterRequest 定义中包含 Nickname 字段（通常在 .proto 文件中定义）
 			resp, err := userClient.Register(ctx.Request.Context(), &user.RegisterRequest{
-				Username: req.Username,
-				Password: req.Password,
-				Mobile:   req.Mobile,
-				Nickname: req.Nickname, // 透传给 user 核心服务
+				Username: req.Username, Password: req.Password, Mobile: req.Mobile, Nickname: req.Nickname,
 			})
-
 			if err != nil {
 				response.Error(ctx, http.StatusInternalServerError, err.Error())
 				return
@@ -221,18 +180,14 @@ func main() {
 			response.Success(ctx, resp)
 		})
 
-		// 商品列表 (支持搜索)
+		// 商城前端商品展示与搜索
 		v1.GET("/product/list", func(ctx *gin.Context) {
 			page, _ := strconv.Atoi(ctx.DefaultQuery("page", "1"))
 			pageSize, _ := strconv.Atoi(ctx.DefaultQuery("page_size", "10"))
 			catId, _ := strconv.ParseInt(ctx.DefaultQuery("category_id", "0"), 10, 64)
 			query := ctx.Query("query")
-
 			resp, err := productClient.ListProducts(ctx.Request.Context(), &product.ListProductsRequest{
-				Page:       int32(page),
-				PageSize:   int32(pageSize),
-				CategoryId: catId,
-				Query:      query,
+				Page: int32(page), PageSize: int32(pageSize), CategoryId: catId, Query: query,
 			})
 			if err != nil {
 				response.Error(ctx, http.StatusInternalServerError, err.Error())
@@ -254,19 +209,11 @@ func main() {
 
 		// 获取商品评价列表
 		v1.GET("/review/list", func(c *gin.Context) {
-			productId := c.Query("product_id")
-			if productId == "" {
-				response.Error(c, http.StatusBadRequest, "product_id 不能为空")
-				return
-			}
+			pid, _ := strconv.ParseInt(c.Query("product_id"), 10, 64)
 			page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 			pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
-			pid, _ := strconv.ParseInt(productId, 10, 64)
-
 			resp, err := reviewClient.ListReviews(c.Request.Context(), &review.ListReviewsRequest{
-				ProductId: pid,
-				Page:      int32(page),
-				PageSize:  int32(pageSize),
+				ProductId: pid, Page: int32(page), PageSize: int32(pageSize),
 			})
 			if err != nil {
 				response.Error(c, http.StatusInternalServerError, "查询评价失败")
@@ -277,7 +224,7 @@ func main() {
 	}
 
 	// ---------------------------
-	// 受保护接口 (需 Bearer Token)
+	// 受保护接口 (需 Bearer Token 即 JWT Token)
 	// ---------------------------
 	// 把 "/" 改成了 ""，解决了双斜杠 404 问题
 	authed := v1.Group("")
@@ -303,7 +250,6 @@ func main() {
 			}
 			// 强制使用当前登录用户ID
 			req.Id = ctx.MustGet("userId").(int64)
-
 			resp, err := userClient.UpdateUser(ctx, &req)
 			if err != nil {
 				response.Error(ctx, http.StatusInternalServerError, err.Error())
@@ -322,12 +268,8 @@ func main() {
 				response.Error(ctx, http.StatusBadRequest, err.Error())
 				return
 			}
-
-			userId := ctx.MustGet("userId").(int64)
 			resp, err := userClient.UpdatePassword(ctx.Request.Context(), &user.UpdatePasswordRequest{
-				UserId:      userId,
-				OldPassword: req.OldPassword,
-				NewPassword: req.NewPassword,
+				UserId: ctx.MustGet("userId").(int64), OldPassword: req.OldPassword, NewPassword: req.NewPassword,
 			})
 			if err != nil {
 				response.Error(ctx, http.StatusInternalServerError, err.Error())
@@ -353,23 +295,7 @@ func main() {
 		})
 
 		authed.GET("/address/list", func(ctx *gin.Context) {
-			userId := ctx.MustGet("userId").(int64)
-			resp, err := addressClient.ListAddress(ctx.Request.Context(), &address.ListAddressRequest{UserId: userId})
-			if err != nil {
-				response.Error(ctx, http.StatusInternalServerError, err.Error())
-				return
-			}
-			response.Success(ctx, resp)
-		})
-
-		authed.POST("/address/update", func(ctx *gin.Context) {
-			var req address.UpdateAddressRequest
-			if err := ctx.ShouldBindJSON(&req); err != nil {
-				response.Error(ctx, http.StatusBadRequest, err.Error())
-				return
-			}
-			req.UserId = ctx.MustGet("userId").(int64)
-			resp, err := addressClient.UpdateAddress(ctx.Request.Context(), &req)
+			resp, err := addressClient.ListAddress(ctx.Request.Context(), &address.ListAddressRequest{UserId: ctx.MustGet("userId").(int64)})
 			if err != nil {
 				response.Error(ctx, http.StatusInternalServerError, err.Error())
 				return
@@ -426,8 +352,7 @@ func main() {
 				response.Error(ctx, http.StatusBadRequest, err.Error())
 				return
 			}
-			userId := ctx.MustGet("userId").(int64)
-			_, err := cartClient.AddItem(ctx.Request.Context(), &cart.AddItemRequest{UserId: userId, Item: &cart.CartItem{SkuId: req.SkuId, Quantity: req.Quantity}})
+			_, err := cartClient.AddItem(ctx.Request.Context(), &cart.AddItemRequest{UserId: ctx.MustGet("userId").(int64), Item: &cart.CartItem{SkuId: req.SkuId, Quantity: req.Quantity}})
 			if err != nil {
 				response.Error(ctx, http.StatusInternalServerError, err.Error())
 				return
@@ -436,8 +361,7 @@ func main() {
 		})
 
 		authed.GET("/cart/list", func(ctx *gin.Context) {
-			userId := ctx.MustGet("userId").(int64)
-			resp, err := cartClient.GetCart(ctx.Request.Context(), &cart.GetCartRequest{UserId: userId})
+			resp, err := cartClient.GetCart(ctx.Request.Context(), &cart.GetCartRequest{UserId: ctx.MustGet("userId").(int64)})
 			if err != nil {
 				response.Error(ctx, http.StatusInternalServerError, err.Error())
 				return
@@ -463,7 +387,7 @@ func main() {
 			response.Success(ctx, nil)
 		})
 
-		// --- 订单管理 ---
+		// --- 交易子组 (秒杀、下单、支付) ---
 		authed.POST("/order/create", func(ctx *gin.Context) {
 			var req struct {
 				AddressId int64   `json:"address_id" binding:"required"`
@@ -473,11 +397,8 @@ func main() {
 				response.Error(ctx, http.StatusBadRequest, "必须选择收货地址 (address_id)"+err.Error())
 				return
 			}
-			userId := ctx.MustGet("userId").(int64)
 			resp, err := orderClient.CreateOrder(ctx.Request.Context(), &order.CreateOrderRequest{
-				UserId:    userId,
-				AddressId: req.AddressId,
-				SkuIds:    req.SkuIds,
+				UserId: ctx.MustGet("userId").(int64), AddressId: req.AddressId, SkuIds: req.SkuIds,
 			})
 			if err != nil {
 				response.Error(ctx, http.StatusInternalServerError, err.Error())
@@ -515,7 +436,6 @@ func main() {
 
 		// --- 秒杀接口 (带限流) ---
 		authed.POST("/product/seckill", func(ctx *gin.Context) {
-			// 1. Sentinel 限流埋点
 			e, b := sentinel.Entry(ResSeckill, sentinel.WithTrafficType(base.Inbound))
 			if b != nil {
 				// 触发限流，直接返回 429
@@ -523,7 +443,6 @@ func main() {
 				return
 			}
 			defer e.Exit()
-
 			var req struct {
 				SkuId int64 `json:"sku_id" binding:"required"`
 			}
@@ -531,9 +450,7 @@ func main() {
 				response.Error(ctx, http.StatusBadRequest, err.Error())
 				return
 			}
-			userId := ctx.MustGet("userId").(int64)
-
-			resp, err := productClient.SeckillProduct(ctx.Request.Context(), &product.SeckillProductRequest{UserId: userId, SkuId: req.SkuId})
+			resp, err := productClient.SeckillProduct(ctx.Request.Context(), &product.SeckillProductRequest{UserId: ctx.MustGet("userId").(int64), SkuId: req.SkuId})
 			if err != nil {
 				response.Error(ctx, http.StatusInternalServerError, err.Error())
 				return
@@ -628,20 +545,20 @@ func main() {
 			})
 		}
 
+		// --- [管理后台专属接口组] ---
 		adminGroup := authed.Group("/admin")
 		{
-			// 仪表盘统计
+			// 获取后台仪表盘统计数据 (成交额、GMV、品类占比等)
 			adminGroup.GET("/dashboard/stats", func(ctx *gin.Context) {
-				// 调用 admin-service 的 GetDashboardStats 接口
 				resp, err := adminClient.GetDashboardStats(ctx.Request.Context(), &admin.StatsRequest{})
 				if err != nil {
-					response.Error(ctx, 500, err.Error())
+					response.Error(ctx, http.StatusInternalServerError, err.Error())
 					return
 				}
 				response.Success(ctx, resp)
 			})
 
-			// 用户管理列表
+			// 平台用户管理列表
 			adminGroup.GET("/users", func(ctx *gin.Context) {
 				page, _ := strconv.Atoi(ctx.DefaultQuery("page", "1"))
 				pageSize, _ := strconv.Atoi(ctx.DefaultQuery("page_size", "10"))
@@ -649,92 +566,115 @@ func main() {
 					Page: int32(page), PageSize: int32(pageSize),
 				})
 				if err != nil {
-					response.Error(ctx, 500, err.Error())
+					response.Error(ctx, http.StatusInternalServerError, err.Error())
 					return
 				}
 				response.Success(ctx, resp)
 			})
 
-			// 禁用/启用用户
+			// 修改用户状态 (禁用/启用)
 			adminGroup.POST("/user/toggle", func(ctx *gin.Context) {
-				// 修正后的结构体：字段之间需要换行，Tag 格式必须正确
 				var req struct {
 					UserId   int64 `json:"user_id"`
 					Disabled bool  `json:"disabled"`
 				}
-
 				if err := ctx.ShouldBindJSON(&req); err != nil {
-					response.Error(ctx, 400, "参数错误: "+err.Error())
+					response.Error(ctx, http.StatusBadRequest, "参数解析错误")
 					return
 				}
-
-				// 调用 adminClient
 				resp, err := adminClient.ToggleUserStatus(ctx.Request.Context(), &admin.ToggleStatusRequest{
-					UserId:   req.UserId,
-					Disabled: req.Disabled,
+					UserId: req.UserId, Disabled: req.Disabled,
 				})
-
 				if err != nil {
-					response.Error(ctx, 500, err.Error())
+					response.Error(ctx, http.StatusInternalServerError, err.Error())
 					return
 				}
 				response.Success(ctx, resp)
 			})
 
-			// 删除用户
+			// 删除指定用户
 			adminGroup.DELETE("/user/:id", func(ctx *gin.Context) {
-				idStr := ctx.Param("id")
-				id, _ := strconv.ParseInt(idStr, 10, 64)
-
+				id, _ := strconv.ParseInt(ctx.Param("id"), 10, 64)
 				resp, err := adminClient.DeleteUser(ctx.Request.Context(), &admin.DeleteUserRequest{UserId: id})
 				if err != nil {
-					response.Error(ctx, 500, err.Error())
+					response.Error(ctx, http.StatusInternalServerError, err.Error())
 					return
 				}
 				response.Success(ctx, resp)
 			})
 
-			// 商品管理列表
+			// 商品管理列表 (支持按 category 过滤转发)
 			adminGroup.GET("/products", func(ctx *gin.Context) {
 				page, _ := strconv.Atoi(ctx.DefaultQuery("page", "1"))
-				pageSize, _ := strconv.Atoi(ctx.DefaultQuery("page_size", "10"))
-				resp, err := adminClient.ListAllProducts(ctx, &admin.ListAllProductsRequest{
-					Page: int32(page), PageSize: int32(pageSize),
+				pageSize, _ := strconv.Atoi(ctx.DefaultQuery("page_size", "100"))
+				category := ctx.Query("category") // 从 URL 查询参数获取分类名
+				resp, err := adminClient.ListAllProducts(ctx.Request.Context(), &admin.ListAllProductsRequest{
+					Page: int32(page), PageSize: int32(pageSize), Category: category,
 				})
 				if err != nil {
-					response.Error(ctx, 500, err.Error())
+					response.Error(ctx, http.StatusInternalServerError, err.Error())
 					return
 				}
 				response.Success(ctx, resp)
 			})
 
-			// 更新商品库存/价格
+			// 单个商品更新 (调价/修改库存)
 			adminGroup.POST("/product/update", func(ctx *gin.Context) {
 				var req admin.UpdateProductRequest
 				if err := ctx.ShouldBindJSON(&req); err != nil {
-					response.Error(ctx, 400, "参数错误")
+					response.Error(ctx, http.StatusBadRequest, "参数错误")
 					return
 				}
 				resp, err := adminClient.UpdateProduct(ctx, &req)
 				if err != nil {
-					response.Error(ctx, 500, err.Error())
+					response.Error(ctx, http.StatusInternalServerError, err.Error())
 					return
 				}
 				response.Success(ctx, resp)
 			})
 
-			// 订单发货
+			// 下架/彻底删除商品
+			adminGroup.POST("/product/delete", func(ctx *gin.Context) {
+				var req admin.DeleteProductRequest
+				if err := ctx.ShouldBindJSON(&req); err != nil {
+					response.Error(ctx, http.StatusBadRequest, "参数错误")
+					return
+				}
+				resp, err := adminClient.DeleteProduct(ctx.Request.Context(), &req)
+				if err != nil {
+					response.Error(ctx, http.StatusInternalServerError, err.Error())
+					return
+				}
+				response.Success(ctx, resp)
+			})
+
+			// 寿光市场调价：按分类批量修改价格系数
+			adminGroup.POST("/product/batch-price", func(ctx *gin.Context) {
+				var req admin.BatchPriceRequest
+				if err := ctx.ShouldBindJSON(&req); err != nil {
+					response.Error(ctx, http.StatusBadRequest, "参数格式错误")
+					return
+				}
+				resp, err := adminClient.BatchUpdatePrice(ctx.Request.Context(), &req)
+				if err != nil {
+					response.Error(ctx, http.StatusInternalServerError, err.Error())
+					return
+				}
+				response.Success(ctx, resp)
+			})
+
+			// 平台订单发货操作
 			adminGroup.POST("/order/ship", func(ctx *gin.Context) {
 				var req struct {
 					OrderNo string `json:"order_no"`
 				}
 				if err := ctx.ShouldBindJSON(&req); err != nil {
-					response.Error(ctx, 400, "参数错误")
+					response.Error(ctx, http.StatusBadRequest, "参数错误")
 					return
 				}
 				resp, err := adminClient.ShipOrder(ctx, &admin.ShipOrderRequest{OrderNo: req.OrderNo})
 				if err != nil {
-					response.Error(ctx, 500, err.Error())
+					response.Error(ctx, http.StatusInternalServerError, err.Error())
 					return
 				}
 				response.Success(ctx, resp)
@@ -742,6 +682,7 @@ func main() {
 		}
 	}
 
+	// 6. 启动网关监听
 	addr := fmt.Sprintf(":%d", c.Service.Port)
 	log.Printf("Gateway 网关启动成功: %s", addr)
 	r.Run(addr)

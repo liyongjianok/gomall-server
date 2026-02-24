@@ -64,9 +64,9 @@ type StatsResponse struct {
 	OrderCount    int32                  `protobuf:"varint,2,opt,name=order_count,json=orderCount,proto3" json:"order_count,omitempty"`
 	UserCount     int32                  `protobuf:"varint,3,opt,name=user_count,json=userCount,proto3" json:"user_count,omitempty"`
 	ProductCount  int32                  `protobuf:"varint,4,opt,name=product_count,json=productCount,proto3" json:"product_count,omitempty"`
-	CategoryStats []*CategoryStat        `protobuf:"bytes,5,rep,name=category_stats,json=categoryStats,proto3" json:"category_stats,omitempty"` // 品类占比
-	SalesTrend    []*TrendStat           `protobuf:"bytes,6,rep,name=sales_trend,json=salesTrend,proto3" json:"sales_trend,omitempty"`          // 销售趋势
-	ActualSales   float32                `protobuf:"fixed32,7,opt,name=actual_sales,json=actualSales,proto3" json:"actual_sales,omitempty"`     // 实际成交额 (已支付)
+	CategoryStats []*CategoryStat        `protobuf:"bytes,5,rep,name=category_stats,json=categoryStats,proto3" json:"category_stats,omitempty"`
+	SalesTrend    []*TrendStat           `protobuf:"bytes,6,rep,name=sales_trend,json=salesTrend,proto3" json:"sales_trend,omitempty"`
+	ActualSales   float32                `protobuf:"fixed32,7,opt,name=actual_sales,json=actualSales,proto3" json:"actual_sales,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -534,6 +534,7 @@ type ListAllProductsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Page          int32                  `protobuf:"varint,1,opt,name=page,proto3" json:"page,omitempty"`
 	PageSize      int32                  `protobuf:"varint,2,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
+	Category      string                 `protobuf:"bytes,3,opt,name=category,proto3" json:"category,omitempty"` // 🔥 新增：支持按分类过滤查询
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -580,6 +581,13 @@ func (x *ListAllProductsRequest) GetPageSize() int32 {
 		return x.PageSize
 	}
 	return 0
+}
+
+func (x *ListAllProductsRequest) GetCategory() string {
+	if x != nil {
+		return x.Category
+	}
+	return ""
 }
 
 type AdminProductInfo struct {
@@ -721,7 +729,7 @@ func (x *ListAllProductsResponse) GetTotal() int32 {
 type UpdateProductRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"` // 新增：支持改名
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
 	Price         float32                `protobuf:"fixed32,3,opt,name=price,proto3" json:"price,omitempty"`
 	Stock         int32                  `protobuf:"varint,4,opt,name=stock,proto3" json:"stock,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -1248,10 +1256,11 @@ const file_proto_admin_admin_proto_rawDesc = "" +
 	"\x11DeleteUserRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x03R\x06userId\".\n" +
 	"\x12DeleteUserResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess\"I\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"e\n" +
 	"\x16ListAllProductsRequest\x12\x12\n" +
 	"\x04page\x18\x01 \x01(\x05R\x04page\x12\x1b\n" +
-	"\tpage_size\x18\x02 \x01(\x05R\bpageSize\"\x98\x01\n" +
+	"\tpage_size\x18\x02 \x01(\x05R\bpageSize\x12\x1a\n" +
+	"\bcategory\x18\x03 \x01(\tR\bcategory\"\x98\x01\n" +
 	"\x10AdminProductInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x14\n" +

@@ -15,7 +15,9 @@ import (
 	"go-ecommerce/proto/admin"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/reflection"
+	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
 )
 
@@ -106,6 +108,8 @@ func (s *server) ToggleUserStatus(ctx context.Context, req *admin.ToggleStatusRe
 }
 
 // --- 商品管理 ---
+// apps/admin/main.go 里的 ListAllProducts 方法
+
 func (s *server) ListAllProducts(ctx context.Context, req *admin.ListAllProductsRequest) (*admin.ListAllProductsResponse, error) {
 	var prods []struct {
 		ID       int64
@@ -115,13 +119,32 @@ func (s *server) ListAllProducts(ctx context.Context, req *admin.ListAllProducts
 		Picture  string
 		Category string
 	}
+
+	query := s.dbProduct.Debug().Table("products")
+	if req.Category != "" {
+		query = query.Where("category = ?", req.Category)
+	}
 	var total int64
-	s.dbProduct.Table("products").Count(&total)
-	s.dbProduct.Table("products").Limit(int(req.PageSize)).Offset(int((req.Page - 1) * req.PageSize)).Find(&prods)
+	query.Count(&total)
+
+	err := query.Limit(int(req.PageSize)).
+		Offset(int((req.Page - 1) * req.PageSize)).
+		Find(&prods).Error
+
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "查询数据库失败: %v", err)
+	}
 
 	var res []*admin.AdminProductInfo
 	for _, p := range prods {
-		res = append(res, &admin.AdminProductInfo{Id: p.ID, Name: p.Name, Price: p.Price, Stock: p.Stock, Picture: p.Picture, Category: p.Category})
+		res = append(res, &admin.AdminProductInfo{
+			Id:       p.ID,
+			Name:     p.Name,
+			Price:    p.Price,
+			Stock:    p.Stock,
+			Picture:  p.Picture,
+			Category: p.Category,
+		})
 	}
 	return &admin.ListAllProductsResponse{Products: res, Total: int32(total)}, nil
 }
@@ -170,7 +193,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("连接数据库 %s 失败: %v", dbName, err)
 		}
-		return db
+		return db.Debug()
 	}
 
 	dbU := connect("db_user")

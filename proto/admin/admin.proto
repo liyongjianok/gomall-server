@@ -14,8 +14,8 @@ service AdminService {
   // --- 商品管理 ---
   rpc ListAllProducts(ListAllProductsRequest) returns (ListAllProductsResponse);
   rpc UpdateProduct(UpdateProductRequest) returns (UpdateProductResponse);
-  rpc DeleteProduct(DeleteProductRequest) returns (DeleteProductResponse); // 新增：删除/下架商品
-  rpc BatchUpdatePrice(BatchPriceRequest) returns (BatchPriceResponse);    // 新增：批量调价
+  rpc DeleteProduct(DeleteProductRequest) returns (DeleteProductResponse); 
+  rpc BatchUpdatePrice(BatchPriceRequest) returns (BatchPriceResponse);    
 
   // --- 订单管理 ---
   rpc ShipOrder(ShipOrderRequest) returns (ShipOrderResponse);
@@ -29,9 +29,9 @@ message StatsResponse {
   int32 order_count = 2;
   int32 user_count = 3;
   int32 product_count = 4;
-  repeated CategoryStat category_stats = 5; // 品类占比
-  repeated TrendStat sales_trend = 6;       // 销售趋势
-  float actual_sales = 7; // 实际成交额 (已支付)
+  repeated CategoryStat category_stats = 5; 
+  repeated TrendStat sales_trend = 6;       
+  float actual_sales = 7; 
 }
 
 message ListUsersRequest {
@@ -66,6 +66,7 @@ message DeleteUserResponse { bool success = 1; }
 message ListAllProductsRequest {
   int32 page = 1;
   int32 page_size = 2;
+  string category = 3; // 🔥 新增：支持按分类过滤查询
 }
 
 message AdminProductInfo {
@@ -84,7 +85,7 @@ message ListAllProductsResponse {
 
 message UpdateProductRequest {
   int64 id = 1;
-  string name = 2; // 新增：支持改名
+  string name = 2; 
   float price = 3;
   int32 stock = 4;
 }
