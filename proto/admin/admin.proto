@@ -73,7 +73,8 @@ message AdminProductInfo {
   string name = 2;
   float price = 3;
   int32 stock = 4;
-  string picture = 5; // 新增：图片地址显示
+  string picture = 5;
+  string category = 6;
 }
 
 message ListAllProductsResponse {

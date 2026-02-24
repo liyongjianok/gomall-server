@@ -116,7 +116,7 @@ func main() {
 	connOpts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),                // 禁用 TLS (内网通信)
 		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy": "round_robin"}`), // 轮询负载均衡
-		grpc.WithUnaryInterceptor(otelgrpc.UnaryClientInterceptor()),            // 添加 OTEL 拦截器：自动把 Trace ID 注入到 gRPC Metadata 中传给下游
+		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),                      // 添加 OTEL 拦截器：自动把 Trace ID 注入到 gRPC Metadata 中传给下游
 	}
 
 	// 连接 Admin Service

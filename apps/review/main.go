@@ -189,7 +189,7 @@ func main() {
 		log.Fatalf("连接订单服务失败: %v", err)
 	}
 
-	s := grpc.NewServer(grpc.UnaryInterceptor(otelgrpc.UnaryServerInterceptor()))
+	s := grpc.NewServer(grpc.StatsHandler(otelgrpc.NewServerHandler()))
 	review.RegisterReviewServiceServer(s, &server{
 		db:          db,
 		orderClient: order.NewOrderServiceClient(orderConn),

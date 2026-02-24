@@ -108,11 +108,12 @@ func (s *server) ToggleUserStatus(ctx context.Context, req *admin.ToggleStatusRe
 // --- 商品管理 ---
 func (s *server) ListAllProducts(ctx context.Context, req *admin.ListAllProductsRequest) (*admin.ListAllProductsResponse, error) {
 	var prods []struct {
-		ID      int64
-		Name    string
-		Price   float32
-		Stock   int32
-		Picture string
+		ID       int64
+		Name     string
+		Price    float32
+		Stock    int32
+		Picture  string
+		Category string
 	}
 	var total int64
 	s.dbProduct.Table("products").Count(&total)
@@ -120,7 +121,7 @@ func (s *server) ListAllProducts(ctx context.Context, req *admin.ListAllProducts
 
 	var res []*admin.AdminProductInfo
 	for _, p := range prods {
-		res = append(res, &admin.AdminProductInfo{Id: p.ID, Name: p.Name, Price: p.Price, Stock: p.Stock, Picture: p.Picture})
+		res = append(res, &admin.AdminProductInfo{Id: p.ID, Name: p.Name, Price: p.Price, Stock: p.Stock, Picture: p.Picture, Category: p.Category})
 	}
 	return &admin.ListAllProductsResponse{Products: res, Total: int32(total)}, nil
 }
